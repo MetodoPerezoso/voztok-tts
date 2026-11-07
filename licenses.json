@@ -10,5 +10,10 @@
     "prueba": {
         "activa": true,
         "expiracion": null
+    },
+    "VZ-ANX-DS6": {
+        "activa": true,
+        "expiracion": "2027-02-05",
+        "nota": "Disponible"
     }
 }
