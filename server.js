@@ -25,37 +25,17 @@ const io = new Server(server, {
 
 let licenciasValidas = {};
 const sesionesActivasPorLicencia = {};
-
 let rankingLikes = {};
 
-const mapaEmojisTikTok = {
-    'laughcry': 'jaja',
-    'joy': 'jaja',
-    'smile': 'sonrisa',
-    'heart': 'corazón',
-    'love': 'me encanta',
-    'rose': 'rosa',
-    'fire': 'fuego',
-    'clap': 'aplausos',
-    'cry': 'carita llorando',
-    'wink': 'guiño',
-    'surprised': 'sorpresa',
-    'thinking': 'pensativo',
-    'thumbsup': 'me gusta',
-    'cool': 'genial'
-};
+// Configuración de GitHub API para persistencia real en el repositorio
+const GITHUB_TOKEN = process.env.GITHUB_TOKEN; 
+const GITHUB_REPO = process.env.GITHUB_REPO;   
+const GITHUB_BRANCH = process.env.GITHUB_BRANCH || "main";
 
 function cargarLicencias() {
     try {
         const filePath = path.join(__dirname, 'licenses.json');
-        if (!fs.existsSync(filePath)) {
-            const defaultLicenses = { 
-                "VOZ-PRO-2026": { "activa": true, "expiracion": "2026-12-31", "nota": "Admin Principal" },
-                "RODRI-ADMIN-2026": { "activa": true, "expiracion": null, "nota": "Propietario" }
-            };
-            fs.writeFileSync(filePath, JSON.stringify(defaultLicenses, null, 2));
-            licenciasValidas = defaultLicenses;
-        } else {
+        if (fs.existsSync(filePath)) {
             const data = fs.readFileSync(filePath, 'utf8');
             licenciasValidas = JSON.parse(data);
         }
@@ -65,6 +45,86 @@ function cargarLicencias() {
 }
 
 cargarLicencias();
+
+// FUNCIÓN PARA GUARDAR EN GITHUB VIA API
+async function guardarLicenciasEnGitHub(nuevoObjetoLicencias) {
+    licenciasValidas = nuevoObjetoLicencias;
+    const filePath = path.join(__dirname, 'licenses.json');
+    
+    // Guardar localmente para uso inmediato
+    fs.writeFileSync(filePath, JSON.stringify(licenciasValidas, null, 4), 'utf8');
+
+    if (!GITHUB_TOKEN || !GITHUB_REPO) {
+        console.log("⚠️ GITHUB_TOKEN o GITHUB_REPO no configurados.");
+        return;
+    }
+
+    try {
+        const contenidoBase64 = Buffer.from(JSON.stringify(licenciasValidas, null, 4)).toString('base64');
+        
+        const getOptions = {
+            hostname: 'api.github.com',
+            path: `/repos/${GITHUB_REPO}/contents/licenses.json`,
+            method: 'GET',
+            headers: {
+                'User-Agent': 'Voztok-SaaS',
+                'Authorization': `Bearer ${GITHUB_TOKEN}`
+            }
+        };
+
+        let fileSha = '';
+        await new Promise((resolve) => {
+            https.get(getOptions, (res) => {
+                let data = '';
+                res.on('data', chunk => data += chunk);
+                res.on('end', () => {
+                    try {
+                        const json = JSON.parse(data);
+                        if (json.sha) fileSha = json.sha;
+                    } catch (e) {}
+                    resolve();
+                });
+            }).on('error', () => resolve());
+        });
+
+        const payload = JSON.stringify({
+            message: "Actualización automática de licencias desde Panel Admin Voztok",
+            content: contenidoBase64,
+            sha: fileSha,
+            branch: GITHUB_BRANCH
+        });
+
+        const putOptions = {
+            hostname: 'api.github.com',
+            path: `/repos/${GITHUB_REPO}/contents/licenses.json`,
+            method: 'PUT',
+            headers: {
+                'User-Agent': 'Voztok-SaaS',
+                'Authorization': `Bearer ${GITHUB_TOKEN}`,
+                'Content-Type': 'application/json',
+                'Content-Length': Buffer.byteLength(payload)
+            }
+        };
+
+        await new Promise((resolve, reject) => {
+            const req = https.request(putOptions, (res) => {
+                if (res.statusCode === 200 || res.statusCode === 201) {
+                    console.log("☁️ Licencias sincronizadas y guardadas en GitHub exitosamente.");
+                    resolve();
+                } else {
+                    res.on('data', d => console.error("❌ Error API GitHub:", d.toString()));
+                    reject();
+                }
+            });
+            req.on('error', e => reject(e));
+            req.write(payload);
+            req.end();
+        });
+
+    } catch (err) {
+        console.error("❌ Error al conectar con GitHub API:", err);
+    }
+}
 
 app.get('/widget-likes', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'widget-likes.html'));
@@ -96,24 +156,19 @@ app.get('/admin', (req, res) => {
                 button:hover { background: #e0244b; }
                 .btn-green { background: #22c55e; }
                 .btn-green:hover { background: #16a34a; }
-                
-                /* Contenedor con scroll para muchas licencias */
                 .table-container { max-height: 400px; overflow-y: auto; margin-top: 10px; border: 1px solid #334155; border-radius: 6px; }
                 table { width: 100%; border-collapse: collapse; font-size: 13px; }
                 th, td { padding: 8px; border-bottom: 1px solid #334155; text-align: left; background: #1e293b; }
                 th { color: #38bdf8; position: sticky; top: 0; z-index: 10; }
-                
                 .badge-activo { color: #4ade80; font-weight: bold; }
                 .badge-inactivo { color: #ef4444; font-weight: bold; }
                 .input-nota, .input-fecha { background: #0f172a; border: 1px solid #475569; color: white; padding: 5px; border-radius: 4px; width: 100%; font-size: 12px; }
-                
                 .password-wrapper { position: relative; display: flex; align-items: center; }
                 .toggle-password { position: absolute; right: 10px; background: none; border: none; cursor: pointer; font-size: 18px; width: auto; color: #94a3b8; }
             </style>
         </head>
         <body>
             <h2>🛠️ Panel Admin - Voztok</h2>
-            
             <div class="card">
                 <h3>🔐 Autenticación</h3>
                 <div class="password-wrapper">
@@ -121,14 +176,12 @@ app.get('/admin', (req, res) => {
                     <button type="button" class="toggle-password" onclick="togglePasswordVisibility()">👁️</button>
                 </div>
             </div>
-
             <div class="card">
                 <h3>⚡ Generar Nuevas Licencias (Formato VZ-XXX-XXX)</h3>
                 <label>Cantidad:</label>
                 <input type="number" id="cantidadGen" value="5" min="1" max="50">
-                <button class="btn-green" onclick="generarLoteAdmin()">Crear y Guardar en Servidor</button>
+                <button class="btn-green" onclick="generarLoteAdmin()">Crear y Guardar en GitHub</button>
             </div>
-
             <div class="card">
                 <h3>📋 Licencias Registradas en el Sistema</h3>
                 <button onclick="cargarLicencias()">🔄 Cargar / Actualizar Lista</button>
@@ -149,7 +202,6 @@ app.get('/admin', (req, res) => {
                     </table>
                 </div>
             </div>
-
             <script>
                 function togglePasswordVisibility() {
                     const inputKey = document.getElementById('adminPass');
@@ -162,48 +214,30 @@ app.get('/admin', (req, res) => {
                         btnToggle.innerText = '👁️';
                     }
                 }
-
                 async function cargarLicencias() {
                     const pass = document.getElementById('adminPass').value;
-                    const res = await fetch('/api/admin/licencias', {
-                        headers: { 'x-admin-pass': pass }
-                    });
-                    if(res.status === 403) {
-                        alert("Contraseña de administrador incorrecta");
-                        return;
-                    }
+                    const res = await fetch('/api/admin/licencias', { headers: { 'x-admin-pass': pass } });
+                    if(res.status === 403) { alert("Contraseña incorrecta"); return; }
                     const data = await res.json();
                     const tbody = document.getElementById('tablaLicencias');
                     tbody.innerHTML = '';
-
                     for (const [key, info] of Object.entries(data)) {
-                        const notaActual = info.nota || '';
-                        const fechaActual = info.expiracion || '';
-                        const activaChecked = info.activa ? 'checked' : '';
-                        
-                        tbody.innerHTML += \`
+                        tbody.innerHTML += `
                             <tr>
-                                <td><code style="color: #38bdf8; font-size: 13px; font-weight: bold;">\${key}</code></td>
+                                <td><code style="color: #38bdf8; font-size: 13px; font-weight: bold;">${key}</code></td>
                                 <td>
                                     <label style="cursor:pointer; font-size: 12px;">
-                                        <input type="checkbox" \${activaChecked} onchange="toggleActiva('\${key}', this.checked)" style="width:auto; cursor:pointer;"> 
-                                        \${info.activa ? '<span class="badge-activo">Activa</span>' : '<span class="badge-inactivo">Inactiva</span>'}
+                                        <input type="checkbox" ${info.activa ? 'checked' : ''} onchange="toggleActiva('${key}', this.checked)" style="width:auto; cursor:pointer;"> 
+                                        ${info.activa ? '<span class="badge-activo">Activa</span>' : '<span class="badge-inactivo">Inactiva</span>'}
                                     </label>
                                 </td>
-                                <td>
-                                    <input type="date" class="input-fecha" value="\${fechaActual}" onchange="guardarFecha('\${key}', this.value)" title="Modificar fecha de vencimiento">
-                                </td>
-                                <td>
-                                    <input type="text" class="input-nota" value="\${notaActual}" placeholder="Ej: @usuario / mail" onchange="guardarNota('\${key}', this.value)">
-                                </td>
-                                <td>
-                                    <button onclick="extenderLicencia('\${key}')" style="padding: 5px; font-size: 11px; background: #0284c7; width: auto;" title="Sumar 30 días">+30 Días</button>
-                                </td>
+                                <td><input type="date" class="input-fecha" value="${info.expiracion || ''}" onchange="guardarFecha('${key}', this.value)"></td>
+                                <td><input type="text" class="input-nota" value="${info.nota || ''}" placeholder="Ej: @usuario" onchange="guardarNota('${key}', this.value)"></td>
+                                <td><button onclick="extenderLicencia('${key}')" style="padding: 5px; font-size: 11px; background: #0284c7; width: auto;">+30 Días</button></td>
                             </tr>
-                        \`;
+                        `;
                     }
                 }
-
                 async function generarLoteAdmin() {
                     const pass = document.getElementById('adminPass').value;
                     const cantidad = document.getElementById('cantidadGen').value;
@@ -213,21 +247,18 @@ app.get('/admin', (req, res) => {
                         body: JSON.stringify({ cantidad: parseInt(cantidad) })
                     });
                     if(res.status === 403) { alert("Contraseña incorrecta"); return; }
-                    alert("¡Lote generado y guardado con éxito!");
+                    alert("¡Lote generado y guardado en GitHub con éxito!");
                     cargarLicencias();
                 }
-
                 async function extenderLicencia(key) {
                     const pass = document.getElementById('adminPass').value;
-                    const res = await fetch('/api/admin/extender', {
+                    await fetch('/api/admin/extender', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json', 'x-admin-pass': pass },
                         body: JSON.stringify({ key })
                     });
-                    if(res.status === 403) { alert("Contraseña incorrecta"); return; }
                     cargarLicencias();
                 }
-
                 async function toggleActiva(key, activa) {
                     const pass = document.getElementById('adminPass').value;
                     await fetch('/api/admin/actualizar-estado', {
@@ -235,9 +266,7 @@ app.get('/admin', (req, res) => {
                         headers: { 'Content-Type': 'application/json', 'x-admin-pass': pass },
                         body: JSON.stringify({ key, activa })
                     });
-                    cargarLicencias();
                 }
-
                 async function guardarNota(key, nota) {
                     const pass = document.getElementById('adminPass').value;
                     await fetch('/api/admin/actualizar-nota', {
@@ -246,7 +275,6 @@ app.get('/admin', (req, res) => {
                         body: JSON.stringify({ key, nota })
                     });
                 }
-
                 async function guardarFecha(key, expiracion) {
                     const pass = document.getElementById('adminPass').value;
                     await fetch('/api/admin/actualizar-fecha', {
@@ -264,11 +292,8 @@ app.get('/admin', (req, res) => {
 const verificarAdmin = (req, res, next) => {
     const pass = req.headers['x-admin-pass'] || req.body.pass;
     const ADMIN_SECRET = process.env.ADMIN_SECRET || "metodoperezoso2026"; 
-    if (pass === ADMIN_SECRET) {
-        next();
-    } else {
-        res.status(403).json({ error: "No autorizado" });
-    }
+    if (pass === ADMIN_SECRET) next();
+    else res.status(403).json({ error: "No autorizado" });
 };
 
 app.get('/api/admin/licencias', verificarAdmin, (req, res) => {
@@ -276,7 +301,7 @@ app.get('/api/admin/licencias', verificarAdmin, (req, res) => {
     res.json(licenciasValidas);
 });
 
-app.post('/api/admin/generar', express.json(), verificarAdmin, (req, res) => {
+app.post('/api/admin/generar', express.json(), verificarAdmin, async (req, res) => {
     const cantidad = req.body.cantidad || 5;
     cargarLicencias();
     const conjuntoExistentes = new Set(Object.keys(licenciasValidas));
@@ -284,9 +309,7 @@ app.post('/api/admin/generar', express.json(), verificarAdmin, (req, res) => {
     const generarBloque = (longitud = 3) => {
         const caracteres = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
         let resStr = '';
-        for (let i = 0; i < longitud; i++) {
-            resStr += caracteres.charAt(Math.floor(Math.random() * caracteres.length));
-        }
+        for (let i = 0; i < longitud; i++) resStr += caracteres.charAt(Math.floor(Math.random() * caracteres.length));
         return resStr;
     };
 
@@ -299,24 +322,18 @@ app.post('/api/admin/generar', express.json(), verificarAdmin, (req, res) => {
         const nuevaClave = `VZ-${generarBloque(3)}-${generarBloque(3)}`;
         if (!conjuntoExistentes.has(nuevaClave)) {
             conjuntoExistentes.add(nuevaClave);
-            licenciasValidas[nuevaClave] = { 
-                "activa": true, 
-                "expiracion": fechaStr,
-                "nota": "Disponible (Sin asignar)" 
-            };
+            licenciasValidas[nuevaClave] = { "activa": true, "expiracion": fechaStr, "nota": "Disponible" };
             creadas++;
         }
     }
 
-    const filePath = path.join(__dirname, 'licenses.json');
-    fs.writeFileSync(filePath, JSON.stringify(licenciasValidas, null, 4), 'utf8');
+    await guardarLicenciasEnGitHub(licenciasValidas);
     res.json({ success: true, total: Object.keys(licenciasValidas).length });
 });
 
-app.post('/api/admin/extender', express.json(), verificarAdmin, (req, res) => {
+app.post('/api/admin/extender', express.json(), verificarAdmin, async (req, res) => {
     const { key } = req.body;
     cargarLicencias();
-
     if (licenciasValidas[key]) {
         let baseDate = new Date();
         if (licenciasValidas[key].expiracion) {
@@ -327,44 +344,40 @@ app.post('/api/admin/extender', express.json(), verificarAdmin, (req, res) => {
         licenciasValidas[key].expiracion = baseDate.toISOString().split('T')[0];
         licenciasValidas[key].activa = true;
 
-        const filePath = path.join(__dirname, 'licenses.json');
-        fs.writeFileSync(filePath, JSON.stringify(licenciasValidas, null, 4), 'utf8');
+        await guardarLicenciasEnGitHub(licenciasValidas);
         return res.json({ success: true, nuevaExpiracion: licenciasValidas[key].expiracion });
     }
-    res.status(404).json({ error: "Licencia no encontrada" });
+    res.status(404).json({ error: "No encontrada" });
 });
 
-app.post('/api/admin/actualizar-estado', express.json(), verificarAdmin, (req, res) => {
+app.post('/api/admin/actualizar-estado', express.json(), verificarAdmin, async (req, res) => {
     const { key, activa } = req.body;
     cargarLicencias();
     if (licenciasValidas[key]) {
         licenciasValidas[key].activa = activa;
-        const filePath = path.join(__dirname, 'licenses.json');
-        fs.writeFileSync(filePath, JSON.stringify(licenciasValidas, null, 4), 'utf8');
+        await guardarLicenciasEnGitHub(licenciasValidas);
         return res.json({ success: true });
     }
     res.status(404).json({ error: "No encontrada" });
 });
 
-app.post('/api/admin/actualizar-nota', express.json(), verificarAdmin, (req, res) => {
+app.post('/api/admin/actualizar-nota', express.json(), verificarAdmin, async (req, res) => {
     const { key, nota } = req.body;
     cargarLicencias();
     if (licenciasValidas[key]) {
         licenciasValidas[key].nota = nota;
-        const filePath = path.join(__dirname, 'licenses.json');
-        fs.writeFileSync(filePath, JSON.stringify(licenciasValidas, null, 4), 'utf8');
+        await guardarLicenciasEnGitHub(licenciasValidas);
         return res.json({ success: true });
     }
     res.status(404).json({ error: "No encontrada" });
 });
 
-app.post('/api/admin/actualizar-fecha', express.json(), verificarAdmin, (req, res) => {
+app.post('/api/admin/actualizar-fecha', express.json(), verificarAdmin, async (req, res) => {
     const { key, expiracion } = req.body;
     cargarLicencias();
     if (licenciasValidas[key]) {
         licenciasValidas[key].expiracion = expiracion || null;
-        const filePath = path.join(__dirname, 'licenses.json');
-        fs.writeFileSync(filePath, JSON.stringify(licenciasValidas, null, 4), 'utf8');
+        await guardarLicenciasEnGitHub(licenciasValidas);
         return res.json({ success: true });
     }
     res.status(404).json({ error: "No encontrada" });
@@ -588,7 +601,7 @@ io.on('connection', (socket) => {
             }
 
             if (tipoComentario === 'punto' && !mensajeLimpio.startsWith('.')) return;
-            if (tipoComentario === 'barra' && !mensajeLimpio.startsWith('/')) return;
+            if (tipoComentario === 'barra' && !mensajeLoptio.startsWith('/')) return;
             if (tipoComentario === 'comando' && !mensajeLimpio.startsWith(textoComando)) return;
 
             let textoALeer = leerNombre ? `${nombreLimpio} dice ${mensajeLimpio}` : mensajeLimpio;
