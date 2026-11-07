@@ -96,12 +96,19 @@ app.get('/admin', (req, res) => {
                 button:hover { background: #e0244b; }
                 .btn-green { background: #22c55e; }
                 .btn-green:hover { background: #16a34a; }
-                table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 13px; }
-                th, td { padding: 8px; border-bottom: 1px solid #334155; text-align: left; }
-                th { color: #38bdf8; }
+                
+                /* Contenedor con scroll para muchas licencias */
+                .table-container { max-height: 400px; overflow-y: auto; margin-top: 10px; border: 1px solid #334155; border-radius: 6px; }
+                table { width: 100%; border-collapse: collapse; font-size: 13px; }
+                th, td { padding: 8px; border-bottom: 1px solid #334155; text-align: left; background: #1e293b; }
+                th { color: #38bdf8; position: sticky; top: 0; z-index: 10; }
+                
                 .badge-activo { color: #4ade80; font-weight: bold; }
                 .badge-inactivo { color: #ef4444; font-weight: bold; }
-                .input-nota { background: #0f172a; border: 1px solid #475569; color: white; padding: 5px; border-radius: 4px; width: 100%; font-size: 12px; }
+                .input-nota, .input-fecha { background: #0f172a; border: 1px solid #475569; color: white; padding: 5px; border-radius: 4px; width: 100%; font-size: 12px; }
+                
+                .password-wrapper { position: relative; display: flex; align-items: center; }
+                .toggle-password { position: absolute; right: 10px; background: none; border: none; cursor: pointer; font-size: 18px; width: auto; color: #94a3b8; }
             </style>
         </head>
         <body>
@@ -109,7 +116,10 @@ app.get('/admin', (req, res) => {
             
             <div class="card">
                 <h3>🔐 Autenticación</h3>
-                <input type="password" id="adminPass" placeholder="Ingresa tu contraseña maestra">
+                <div class="password-wrapper">
+                    <input type="password" id="adminPass" placeholder="Ingresa tu contraseña maestra">
+                    <button type="button" class="toggle-password" onclick="togglePasswordVisibility()">👁️</button>
+                </div>
             </div>
 
             <div class="card">
@@ -122,7 +132,7 @@ app.get('/admin', (req, res) => {
             <div class="card">
                 <h3>📋 Licencias Registradas en el Sistema</h3>
                 <button onclick="cargarLicencias()">🔄 Cargar / Actualizar Lista</button>
-                <div style="overflow-x: auto;">
+                <div class="table-container">
                     <table>
                         <thead>
                             <tr>
@@ -141,6 +151,18 @@ app.get('/admin', (req, res) => {
             </div>
 
             <script>
+                function togglePasswordVisibility() {
+                    const inputKey = document.getElementById('adminPass');
+                    const btnToggle = document.querySelector('.toggle-password');
+                    if (inputKey.type === 'password') {
+                        inputKey.type = 'text';
+                        btnToggle.innerText = '🙈';
+                    } else {
+                        inputKey.type = 'password';
+                        btnToggle.innerText = '👁️';
+                    }
+                }
+
                 async function cargarLicencias() {
                     const pass = document.getElementById('adminPass').value;
                     const res = await fetch('/api/admin/licencias', {
@@ -156,22 +178,26 @@ app.get('/admin', (req, res) => {
 
                     for (const [key, info] of Object.entries(data)) {
                         const notaActual = info.nota || '';
+                        const fechaActual = info.expiracion || '';
                         const activaChecked = info.activa ? 'checked' : '';
+                        
                         tbody.innerHTML += \`
                             <tr>
-                                <td><code style="color: #38bdf8; font-size: 14px; font-weight: bold;">\${key}</code></td>
+                                <td><code style="color: #38bdf8; font-size: 13px; font-weight: bold;">\${key}</code></td>
                                 <td>
                                     <label style="cursor:pointer; font-size: 12px;">
                                         <input type="checkbox" \${activaChecked} onchange="toggleActiva('\${key}', this.checked)" style="width:auto; cursor:pointer;"> 
                                         \${info.activa ? '<span class="badge-activo">Activa</span>' : '<span class="badge-inactivo">Inactiva</span>'}
                                     </label>
                                 </td>
-                                <td>\${info.expiracion || 'Vitalicia'}</td>
+                                <td>
+                                    <input type="date" class="input-fecha" value="\${fechaActual}" onchange="guardarFecha('\${key}', this.value)" title="Modificar fecha de vencimiento">
+                                </td>
                                 <td>
                                     <input type="text" class="input-nota" value="\${notaActual}" placeholder="Ej: @usuario / mail" onchange="guardarNota('\${key}', this.value)">
                                 </td>
                                 <td>
-                                    <button onclick="extenderLicencia('\${key}')" style="padding: 5px; font-size: 11px; background: #0284c7; width: auto;">+30 Días</button>
+                                    <button onclick="extenderLicencia('\${key}')" style="padding: 5px; font-size: 11px; background: #0284c7; width: auto;" title="Sumar 30 días">+30 Días</button>
                                 </td>
                             </tr>
                         \`;
@@ -220,6 +246,15 @@ app.get('/admin', (req, res) => {
                         body: JSON.stringify({ key, nota })
                     });
                 }
+
+                async function guardarFecha(key, expiracion) {
+                    const pass = document.getElementById('adminPass').value;
+                    await fetch('/api/admin/actualizar-fecha', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json', 'x-admin-pass': pass },
+                        body: JSON.stringify({ key, expiracion })
+                    });
+                }
             </script>
         </body>
         </html>
@@ -228,7 +263,7 @@ app.get('/admin', (req, res) => {
 
 const verificarAdmin = (req, res, next) => {
     const pass = req.headers['x-admin-pass'] || req.body.pass;
-    const ADMIN_SECRET = process.env.ADMIN_SECRET || "metodoperezoso2026"; 
+    const ADMIN_SECRET = process.env.ADMIN_SECRET || "214365"; 
     if (pass === ADMIN_SECRET) {
         next();
     } else {
@@ -285,7 +320,7 @@ app.post('/api/admin/extender', express.json(), verificarAdmin, (req, res) => {
     if (licenciasValidas[key]) {
         let baseDate = new Date();
         if (licenciasValidas[key].expiracion) {
-            let currentExp = new Date(licenciasValidas[key].expiracion);
+            let currentExp = new Date(licenciasValidas[key].expiracion + 'T00:00:00');
             if (currentExp > baseDate) baseDate = currentExp;
         }
         baseDate.setDate(baseDate.getDate() + 30);
@@ -316,6 +351,18 @@ app.post('/api/admin/actualizar-nota', express.json(), verificarAdmin, (req, res
     cargarLicencias();
     if (licenciasValidas[key]) {
         licenciasValidas[key].nota = nota;
+        const filePath = path.join(__dirname, 'licenses.json');
+        fs.writeFileSync(filePath, JSON.stringify(licenciasValidas, null, 4), 'utf8');
+        return res.json({ success: true });
+    }
+    res.status(404).json({ error: "No encontrada" });
+});
+
+app.post('/api/admin/actualizar-fecha', express.json(), verificarAdmin, (req, res) => {
+    const { key, expiracion } = req.body;
+    cargarLicencias();
+    if (licenciasValidas[key]) {
+        licenciasValidas[key].expiracion = expiracion || null;
         const filePath = path.join(__dirname, 'licenses.json');
         fs.writeFileSync(filePath, JSON.stringify(licenciasValidas, null, 4), 'utf8');
         return res.json({ success: true });
