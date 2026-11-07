@@ -52,7 +52,7 @@ function cargarLicencias() {
         const filePath = path.join(__dirname, 'licenses.json');
         if (!fs.existsSync(filePath)) {
             const defaultLicenses = { 
-                "MP-PEREZOSO-PROMO1": { "activa": true, "expiracion": "2026-12-31" },
+                "VOZ-PRO-2026": { "activa": true, "expiracion": "2026-12-31" },
                 "RODRI-ADMIN-2026": { "activa": true, "expiracion": null }
             };
             fs.writeFileSync(filePath, JSON.stringify(defaultLicenses, null, 2));
@@ -79,6 +79,200 @@ app.post('/api/reset-likes', (req, res) => {
     io.emit('actualizar-ranking-likes', []);
     res.json({ success: true });
 });
+
+// ==========================================
+// PANEL DE ADMINISTRACIÓN PRIVADO (/admin)
+// ==========================================
+app.get('/admin', (req, res) => {
+    res.send(`
+        <!DOCTYPE html>
+        <html lang="es">
+        <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>Voztok - Admin de Licencias</title>
+            <style>
+                body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #0f172a; color: #f8fafc; padding: 20px; max-width: 850px; margin: 0 auto; }
+                h2 { color: #38bdf8; text-align: center; }
+                .card { background: #1e293b; padding: 20px; border-radius: 12px; border: 1px solid #334155; margin-bottom: 20px; box-shadow: 0 10px 25px rgba(0,0,0,0.5); }
+                input, button { padding: 12px; font-size: 15px; border-radius: 6px; border: 1px solid #475569; background: #0f172a; color: white; width: 100%; box-sizing: border-box; margin-top: 8px; }
+                button { background: #fe2c55; font-weight: bold; cursor: pointer; border: none; transition: background 0.2s; }
+                button:hover { background: #e0244b; }
+                .btn-green { background: #22c55e; }
+                .btn-green:hover { background: #16a34a; }
+                table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 14px; }
+                th, td { padding: 10px; border-bottom: 1px solid #334155; text-align: left; }
+                th { color: #38bdf8; }
+                .badge-activo { color: #4ade80; font-weight: bold; }
+                .badge-inactivo { color: #ef4444; font-weight: bold; }
+            </style>
+        </head>
+        <body>
+            <h2>🛠️ Panel Admin - Voztok</h2>
+            
+            <div class="card">
+                <h3>🔐 Autenticación</h3>
+                <input type="password" id="adminPass" placeholder="Contraseña maestra de admin (ej: metodoperezoso2026)">
+            </div>
+
+            <div class="card">
+                <h3>⚡ Generar Nuevas Licencias (Formato VZ-XXX-XXX)</h3>
+                <label>Cantidad:</label>
+                <input type="number" id="cantidadGen" value="5" min="1" max="50">
+                <button class="btn-green" onclick="generarLoteAdmin()">Crear y Guardar en Servidor</button>
+            </div>
+
+            <div class="card">
+                <h3>📋 Licencias Registradas en el Sistema</h3>
+                <button onclick="cargarLicencias()">🔄 Cargar / Actualizar Lista</button>
+                <div style="overflow-x: auto;">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Licencia</th>
+                                <th>Estado</th>
+                                <th>Vencimiento</th>
+                                <th>Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tablaLicencias">
+                            <tr><td colspan="4" style="text-align: center; color: #64748b;">Ingrese contraseña y cargue la lista...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <script>
+                async function cargarLicencias() {
+                    const pass = document.getElementById('adminPass').value;
+                    const res = await fetch('/api/admin/licencias', {
+                        headers: { 'x-admin-pass': pass }
+                    });
+                    if(res.status === 403) {
+                        alert("Contraseña de administrador incorrecta");
+                        return;
+                    }
+                    const data = await res.json();
+                    const tbody = document.getElementById('tablaLicencias');
+                    tbody.innerHTML = '';
+
+                    for (const [key, info] of Object.entries(data)) {
+                        tbody.innerHTML += \`
+                            <tr>
+                                <td><code style="color: #38bdf8; font-size: 15px;">\${key}</code></td>
+                                <td><span class="\${info.activa ? 'badge-activo' : 'badge-inactivo'}">\${info.activa ? 'Activa' : 'Inactiva'}</span></td>
+                                <td>\${info.expiracion || 'Vitalicia'}</td>
+                                <td>
+                                    <button onclick="extenderLicencia('\${key}')" style="padding: 6px; font-size: 12px; background: #0284c7; width: auto;">+30 Días</button>
+                                </td>
+                            </tr>
+                        \`;
+                    }
+                }
+
+                async function generarLoteAdmin() {
+                    const pass = document.getElementById('adminPass').value;
+                    const cantidad = document.getElementById('cantidadGen').value;
+                    const res = await fetch('/api/admin/generar', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json', 'x-admin-pass': pass },
+                        body: JSON.stringify({ cantidad: parseInt(cantidad) })
+                    });
+                    if(res.status === 403) { alert("Contraseña incorrecta"); return; }
+                    alert("¡Lote generado y guardado con éxito!");
+                    cargarLicencias();
+                }
+
+                async function extenderLicencia(key) {
+                    const pass = document.getElementById('adminPass').value;
+                    const res = await fetch('/api/admin/extender', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json', 'x-admin-pass': pass },
+                        body: JSON.stringify({ key })
+                    });
+                    if(res.status === 403) { alert("Contraseña incorrecta"); return; }
+                    cargarLicencias();
+                }
+            </script>
+        </body>
+        </html>
+    `);
+});
+
+// Middleware de seguridad admin
+const verificarAdmin = (req, res, next) => {
+    const pass = req.headers['x-admin-pass'] || req.body.pass;
+    const ADMIN_SECRET = process.env.ADMIN_SECRET || "metodoperezoso2026"; 
+    if (pass === ADMIN_SECRET) {
+        next();
+    } else {
+        res.status(403).json({ error: "No autorizado" });
+    }
+};
+
+// Endpoint API: Obtener licencias
+app.get('/api/admin/licencias', verificarAdmin, (req, res) => {
+    cargarLicencias();
+    res.json(licenciasValidas);
+});
+
+// Endpoint API: Generar lote formato VZ-XXX-XXX automático
+app.post('/api/admin/generar', express.json(), verificarAdmin, (req, res) => {
+    const cantidad = req.body.cantidad || 5;
+    cargarLicencias();
+    const conjuntoExistentes = new Set(Object.keys(licenciasValidas));
+
+    const generarBloque = (longitud = 3) => {
+        const caracteres = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+        let resStr = '';
+        for (let i = 0; i < longitud; i++) {
+            resStr += caracteres.charAt(Math.floor(Math.random() * caracteres.length));
+        }
+        return resStr;
+    };
+
+    // Vencimiento por defecto a 90 días (3 meses) para margen de venta
+    const fechaFutura = new Date();
+    fechaFutura.setDate(fechaFutura.getDate() + 90);
+    const fechaStr = fechaFutura.toISOString().split('T')[0];
+
+    let creadas = 0;
+    while (creadas < cantidad) {
+        const nuevaClave = `VZ-${generarBloque(3)}-${generarBloque(3)}`;
+        if (!conjuntoExistentes.has(nuevaClave)) {
+            conjuntoExistentes.add(nuevaClave);
+            licenciasValidas[nuevaClave] = { "activa": true, "expiracion": fechaStr };
+            creadas++;
+        }
+    }
+
+    const filePath = path.join(__dirname, 'licenses.json');
+    fs.writeFileSync(filePath, JSON.stringify(licenciasValidas, null, 4), 'utf8');
+    res.json({ success: true, total: Object.keys(licenciasValidas).length });
+});
+
+// Endpoint API: Extender 30 días a una licencia existente (Opción B)
+app.post('/api/admin/extender', express.json(), verificarAdmin, (req, res) => {
+    const { key } = req.body;
+    cargarLicencias();
+
+    if (licenciasValidas[key]) {
+        let baseDate = new Date();
+        if (licenciasValidas[key].expiracion) {
+            let currentExp = new Date(licenciasValidas[key].expiracion);
+            if (currentExp > baseDate) baseDate = currentExp;
+        }
+        baseDate.setDate(baseDate.getDate() + 30);
+        licenciasValidas[key].expiracion = baseDate.toISOString().split('T')[0];
+        licenciasValidas[key].activa = true;
+
+        const filePath = path.join(__dirname, 'licenses.json');
+        fs.writeFileSync(filePath, JSON.stringify(licenciasValidas, null, 4), 'utf8');
+        return res.json({ success: true, nuevaExpiracion: licenciasValidas[key].expiracion });
+    }
+    res.status(404).json({ error: "Licencia no encontrada" });
+});
+// ==========================================
 
 function limpiarTexto(texto, permitirEmojis = false) {
     if (!texto) return '';
@@ -221,6 +415,7 @@ io.on('connection', (socket) => {
     });
 
     socket.on('configurar-usuario', (config) => {
+        cargarLicencias();
         if (!config.licenseKey || !licenciasValidas[config.licenseKey]) {
             socket.emit('estado-conexion', { status: 'error', message: 'Licencia no autorizada.' });
             return;
