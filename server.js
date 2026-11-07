@@ -27,7 +27,6 @@ let licenciasValidas = {};
 const sesionesActivasPorLicencia = {};
 let rankingLikes = {};
 
-// Configuración de GitHub API para persistencia real en el repositorio
 const GITHUB_TOKEN = process.env.GITHUB_TOKEN; 
 const GITHUB_REPO = process.env.GITHUB_REPO;   
 const GITHUB_BRANCH = process.env.GITHUB_BRANCH || "main";
@@ -46,12 +45,10 @@ function cargarLicencias() {
 
 cargarLicencias();
 
-// FUNCIÓN PARA GUARDAR EN GITHUB VIA API
 async function guardarLicenciasEnGitHub(nuevoObjetoLicencias) {
     licenciasValidas = nuevoObjetoLicencias;
     const filePath = path.join(__dirname, 'licenses.json');
     
-    // Guardar localmente para uso inmediato
     fs.writeFileSync(filePath, JSON.stringify(licenciasValidas, null, 4), 'utf8');
 
     if (!GITHUB_TOKEN || !GITHUB_REPO) {
@@ -222,20 +219,18 @@ app.get('/admin', (req, res) => {
                     const tbody = document.getElementById('tablaLicencias');
                     tbody.innerHTML = '';
                     for (const [key, info] of Object.entries(data)) {
-                        tbody.innerHTML += `
-                            <tr>
-                                <td><code style="color: #38bdf8; font-size: 13px; font-weight: bold;">${key}</code></td>
-                                <td>
-                                    <label style="cursor:pointer; font-size: 12px;">
-                                        <input type="checkbox" ${info.activa ? 'checked' : ''} onchange="toggleActiva('${key}', this.checked)" style="width:auto; cursor:pointer;"> 
-                                        ${info.activa ? '<span class="badge-activo">Activa</span>' : '<span class="badge-inactivo">Inactiva</span>'}
-                                    </label>
-                                </td>
-                                <td><input type="date" class="input-fecha" value="${info.expiracion || ''}" onchange="guardarFecha('${key}', this.value)"></td>
-                                <td><input type="text" class="input-nota" value="${info.nota || ''}" placeholder="Ej: @usuario" onchange="guardarNota('${key}', this.value)"></td>
-                                <td><button onclick="extenderLicencia('${key}')" style="padding: 5px; font-size: 11px; background: #0284c7; width: auto;">+30 Días</button></td>
-                            </tr>
-                        `;
+                        const activaChecked = info.activa ? 'checked' : '';
+                        const estadoBadge = info.activa ? '<span class="badge-activo">Activa</span>' : '<span class="badge-inactivo">Inactiva</span>';
+                        const fechaVal = info.expiracion || '';
+                        const notaVal = info.nota || '';
+
+                        const tr = document.createElement('tr');
+                        tr.innerHTML = '<td><code style="color: #38bdf8; font-size: 13px; font-weight: bold;">' + key + '</code></td>' +
+                            '<td><label style="cursor:pointer; font-size: 12px;"><input type="checkbox" ' + activaChecked + ' onchange="toggleActiva(\\'' + key + '\\', this.checked)" style="width:auto; cursor:pointer;"> ' + estadoBadge + '</label></td>' +
+                            '<td><input type="date" class="input-fecha" value="' + fechaVal + '" onchange="guardarFecha(\\'' + key + '\\', this.value)"></td>' +
+                            '<td><input type="text" class="input-nota" value="' + notaVal + '" placeholder="Ej: @usuario" onchange="guardarNota(\\'' + key + '\\', this.value)"></td>' +
+                            '<td><button onclick="extenderLicencia(\\'' + key + '\\')" style="padding: 5px; font-size: 11px; background: #0284c7; width: auto;">+30 Días</button></td>';
+                        tbody.appendChild(tr);
                     }
                 }
                 async function generarLoteAdmin() {
@@ -601,7 +596,7 @@ io.on('connection', (socket) => {
             }
 
             if (tipoComentario === 'punto' && !mensajeLimpio.startsWith('.')) return;
-            if (tipoComentario === 'barra' && !mensajeLoptio.startsWith('/')) return;
+            if (tipoComentario === 'barra' && !mensajeLimpio.startsWith('/')) return;
             if (tipoComentario === 'comando' && !mensajeLimpio.startsWith(textoComando)) return;
 
             let textoALeer = leerNombre ? `${nombreLimpio} dice ${mensajeLimpio}` : mensajeLimpio;
