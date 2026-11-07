@@ -1,5 +1,5 @@
 const express = require('express');
-const http = require('http');
+const http = http = require('http');
 const { Server } = require('socket.io');
 const cors = require('cors');
 const { TikTokLiveConnection } = require('tiktok-live-connector');
@@ -26,10 +26,8 @@ const io = new Server(server, {
 let licenciasValidas = {};
 const sesionesActivasPorLicencia = {};
 
-// Memoria global para el Ranking de Actividad (Likes)
 let rankingLikes = {};
 
-// Diccionario de conversión de emojis de TikTok [tag] a palabras habladas
 const mapaEmojisTikTok = {
     'laughcry': 'jaja',
     'joy': 'jaja',
@@ -52,8 +50,8 @@ function cargarLicencias() {
         const filePath = path.join(__dirname, 'licenses.json');
         if (!fs.existsSync(filePath)) {
             const defaultLicenses = { 
-                "VOZ-PRO-2026": { "activa": true, "expiracion": "2026-12-31" },
-                "RODRI-ADMIN-2026": { "activa": true, "expiracion": null }
+                "VOZ-PRO-2026": { "activa": true, "expiracion": "2026-12-31", "nota": "Admin Principal" },
+                "RODRI-ADMIN-2026": { "activa": true, "expiracion": null, "nota": "Propietario" }
             };
             fs.writeFileSync(filePath, JSON.stringify(defaultLicenses, null, 2));
             licenciasValidas = defaultLicenses;
@@ -68,12 +66,10 @@ function cargarLicencias() {
 
 cargarLicencias();
 
-// Ruta para el widget de OBS (Browser Source)
 app.get('/widget-likes', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'widget-likes.html'));
 });
 
-// Endpoint para reiniciar ranking desde el panel
 app.post('/api/reset-likes', (req, res) => {
     rankingLikes = {};
     io.emit('actualizar-ranking-likes', []);
@@ -92,19 +88,20 @@ app.get('/admin', (req, res) => {
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
             <title>Voztok - Admin de Licencias</title>
             <style>
-                body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #0f172a; color: #f8fafc; padding: 20px; max-width: 850px; margin: 0 auto; }
+                body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #0f172a; color: #f8fafc; padding: 15px; max-width: 950px; margin: 0 auto; }
                 h2 { color: #38bdf8; text-align: center; }
-                .card { background: #1e293b; padding: 20px; border-radius: 12px; border: 1px solid #334155; margin-bottom: 20px; box-shadow: 0 10px 25px rgba(0,0,0,0.5); }
-                input, button { padding: 12px; font-size: 15px; border-radius: 6px; border: 1px solid #475569; background: #0f172a; color: white; width: 100%; box-sizing: border-box; margin-top: 8px; }
+                .card { background: #1e293b; padding: 15px; border-radius: 12px; border: 1px solid #334155; margin-bottom: 15px; box-shadow: 0 10px 25px rgba(0,0,0,0.5); }
+                input, button, select { padding: 10px; font-size: 14px; border-radius: 6px; border: 1px solid #475569; background: #0f172a; color: white; width: 100%; box-sizing: border-box; margin-top: 6px; }
                 button { background: #fe2c55; font-weight: bold; cursor: pointer; border: none; transition: background 0.2s; }
                 button:hover { background: #e0244b; }
                 .btn-green { background: #22c55e; }
                 .btn-green:hover { background: #16a34a; }
-                table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 14px; }
-                th, td { padding: 10px; border-bottom: 1px solid #334155; text-align: left; }
+                table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 13px; }
+                th, td { padding: 8px; border-bottom: 1px solid #334155; text-align: left; }
                 th { color: #38bdf8; }
                 .badge-activo { color: #4ade80; font-weight: bold; }
                 .badge-inactivo { color: #ef4444; font-weight: bold; }
+                .input-nota { background: #0f172a; border: 1px solid #475569; color: white; padding: 5px; border-radius: 4px; width: 100%; font-size: 12px; }
             </style>
         </head>
         <body>
@@ -112,7 +109,7 @@ app.get('/admin', (req, res) => {
             
             <div class="card">
                 <h3>🔐 Autenticación</h3>
-                <input type="password" id="adminPass" placeholder="Contraseña maestra de admin (ej: metodoperezoso2026)">
+                <input type="password" id="adminPass" placeholder="Ingresa tu contraseña maestra">
             </div>
 
             <div class="card">
@@ -132,11 +129,12 @@ app.get('/admin', (req, res) => {
                                 <th>Licencia</th>
                                 <th>Estado</th>
                                 <th>Vencimiento</th>
+                                <th>Nota / Cliente</th>
                                 <th>Acciones</th>
                             </tr>
                         </thead>
                         <tbody id="tablaLicencias">
-                            <tr><td colspan="4" style="text-align: center; color: #64748b;">Ingrese contraseña y cargue la lista...</td></tr>
+                            <tr><td colspan="5" style="text-align: center; color: #64748b;">Ingrese contraseña y cargue la lista...</td></tr>
                         </tbody>
                     </table>
                 </div>
@@ -157,13 +155,23 @@ app.get('/admin', (req, res) => {
                     tbody.innerHTML = '';
 
                     for (const [key, info] of Object.entries(data)) {
+                        const notaActual = info.nota || '';
+                        const activaChecked = info.activa ? 'checked' : '';
                         tbody.innerHTML += \`
                             <tr>
-                                <td><code style="color: #38bdf8; font-size: 15px;">\${key}</code></td>
-                                <td><span class="\${info.activa ? 'badge-activo' : 'badge-inactivo'}">\${info.activa ? 'Activa' : 'Inactiva'}</span></td>
+                                <td><code style="color: #38bdf8; font-size: 14px; font-weight: bold;">\${key}</code></td>
+                                <td>
+                                    <label style="cursor:pointer; font-size: 12px;">
+                                        <input type="checkbox" \${activaChecked} onchange="toggleActiva('\${key}', this.checked)" style="width:auto; cursor:pointer;"> 
+                                        \${info.activa ? '<span class="badge-activo">Activa</span>' : '<span class="badge-inactivo">Inactiva</span>'}
+                                    </label>
+                                </td>
                                 <td>\${info.expiracion || 'Vitalicia'}</td>
                                 <td>
-                                    <button onclick="extenderLicencia('\${key}')" style="padding: 6px; font-size: 12px; background: #0284c7; width: auto;">+30 Días</button>
+                                    <input type="text" class="input-nota" value="\${notaActual}" placeholder="Ej: @usuario / mail" onchange="guardarNota('\${key}', this.value)">
+                                </td>
+                                <td>
+                                    <button onclick="extenderLicencia('\${key}')" style="padding: 5px; font-size: 11px; background: #0284c7; width: auto;">+30 Días</button>
                                 </td>
                             </tr>
                         \`;
@@ -193,13 +201,31 @@ app.get('/admin', (req, res) => {
                     if(res.status === 403) { alert("Contraseña incorrecta"); return; }
                     cargarLicencias();
                 }
+
+                async function toggleActiva(key, activa) {
+                    const pass = document.getElementById('adminPass').value;
+                    await fetch('/api/admin/actualizar-estado', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json', 'x-admin-pass': pass },
+                        body: JSON.stringify({ key, activa })
+                    });
+                    cargarLicencias();
+                }
+
+                async function guardarNota(key, nota) {
+                    const pass = document.getElementById('adminPass').value;
+                    await fetch('/api/admin/actualizar-nota', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json', 'x-admin-pass': pass },
+                        body: JSON.stringify({ key, nota })
+                    });
+                }
             </script>
         </body>
         </html>
     `);
 });
 
-// Middleware de seguridad admin
 const verificarAdmin = (req, res, next) => {
     const pass = req.headers['x-admin-pass'] || req.body.pass;
     const ADMIN_SECRET = process.env.ADMIN_SECRET || "metodoperezoso2026"; 
@@ -210,13 +236,11 @@ const verificarAdmin = (req, res, next) => {
     }
 };
 
-// Endpoint API: Obtener licencias
 app.get('/api/admin/licencias', verificarAdmin, (req, res) => {
     cargarLicencias();
     res.json(licenciasValidas);
 });
 
-// Endpoint API: Generar lote formato VZ-XXX-XXX automático
 app.post('/api/admin/generar', express.json(), verificarAdmin, (req, res) => {
     const cantidad = req.body.cantidad || 5;
     cargarLicencias();
@@ -231,7 +255,6 @@ app.post('/api/admin/generar', express.json(), verificarAdmin, (req, res) => {
         return resStr;
     };
 
-    // Vencimiento por defecto a 90 días (3 meses) para margen de venta
     const fechaFutura = new Date();
     fechaFutura.setDate(fechaFutura.getDate() + 90);
     const fechaStr = fechaFutura.toISOString().split('T')[0];
@@ -241,7 +264,11 @@ app.post('/api/admin/generar', express.json(), verificarAdmin, (req, res) => {
         const nuevaClave = `VZ-${generarBloque(3)}-${generarBloque(3)}`;
         if (!conjuntoExistentes.has(nuevaClave)) {
             conjuntoExistentes.add(nuevaClave);
-            licenciasValidas[nuevaClave] = { "activa": true, "expiracion": fechaStr };
+            licenciasValidas[nuevaClave] = { 
+                "activa": true, 
+                "expiracion": fechaStr,
+                "nota": "Disponible (Sin asignar)" 
+            };
             creadas++;
         }
     }
@@ -251,7 +278,6 @@ app.post('/api/admin/generar', express.json(), verificarAdmin, (req, res) => {
     res.json({ success: true, total: Object.keys(licenciasValidas).length });
 });
 
-// Endpoint API: Extender 30 días a una licencia existente (Opción B)
 app.post('/api/admin/extender', express.json(), verificarAdmin, (req, res) => {
     const { key } = req.body;
     cargarLicencias();
@@ -271,6 +297,30 @@ app.post('/api/admin/extender', express.json(), verificarAdmin, (req, res) => {
         return res.json({ success: true, nuevaExpiracion: licenciasValidas[key].expiracion });
     }
     res.status(404).json({ error: "Licencia no encontrada" });
+});
+
+app.post('/api/admin/actualizar-estado', express.json(), verificarAdmin, (req, res) => {
+    const { key, activa } = req.body;
+    cargarLicencias();
+    if (licenciasValidas[key]) {
+        licenciasValidas[key].activa = activa;
+        const filePath = path.join(__dirname, 'licenses.json');
+        fs.writeFileSync(filePath, JSON.stringify(licenciasValidas, null, 4), 'utf8');
+        return res.json({ success: true });
+    }
+    res.status(404).json({ error: "No encontrada" });
+});
+
+app.post('/api/admin/actualizar-nota', express.json(), verificarAdmin, (req, res) => {
+    const { key, nota } = req.body;
+    cargarLicencias();
+    if (licenciasValidas[key]) {
+        licenciasValidas[key].nota = nota;
+        const filePath = path.join(__dirname, 'licenses.json');
+        fs.writeFileSync(filePath, JSON.stringify(licenciasValidas, null, 4), 'utf8');
+        return res.json({ success: true });
+    }
+    res.status(404).json({ error: "No encontrada" });
 });
 // ==========================================
 
@@ -317,8 +367,6 @@ function guardarAudioBase64(base64Data) {
 }
 
 io.on('connection', (socket) => {
-    console.log(`🟢 Un cliente se ha conectado: ${socket.id}`);
-
     let tiktokLiveConnection = null;
     let configuracionCliente = null;
     let claveLicenciaAsociada = null;
@@ -336,7 +384,6 @@ io.on('connection', (socket) => {
                 const fechaExpiracion = new Date(licencia.expiracion + 'T23:59:59');
 
                 if (fechaActual > fechaExpiracion) {
-                    console.log(`❌ Intento de acceso con licencia vencida: ${key}`);
                     socket.emit('respuesta-licencia', { valida: false, mensaje: "Tu clave de acceso ha expirado." });
                     return;
                 }
@@ -347,7 +394,6 @@ io.on('connection', (socket) => {
 
             const socketAnteriorId = sesionesActivasPorLicencia[key];
             if (socketAnteriorId && socketAnteriorId !== socket.id) {
-                console.log(`⚠️ Licencia ${key} duplicada. Expulsando socket anterior: ${socketAnteriorId}`);
                 io.to(socketAnteriorId).emit('sesion-expulsada', { 
                     mensaje: "Tu clave de acceso fue abierta en otro dispositivo." 
                 });
@@ -355,14 +401,12 @@ io.on('connection', (socket) => {
 
             sesionesActivasPorLicencia[key] = socket.id;
 
-            console.log(`🔑 Licencia válida aceptada: ${key} para socket ${socket.id}`);
             socket.emit('respuesta-licencia', { 
                 valida: true, 
                 key: key, 
                 expiracion: expiracionTexto 
             });
         } else {
-            console.log(`❌ Intento de acceso con clave inválida: ${key}`);
             socket.emit('respuesta-licencia', { valida: false, mensaje: "Clave incorrecta o inactiva." });
         }
     });
@@ -405,10 +449,7 @@ io.on('connection', (socket) => {
 
     socket.on('desconectar-bot', () => {
         if (tiktokLiveConnection) {
-            try { 
-                tiktokLiveConnection.disconnect(); 
-                console.log("🔌 Bot desconectado manualmente por el usuario.");
-            } catch (e) {}
+            try { tiktokLiveConnection.disconnect(); } catch (e) {}
         }
         tiktokLiveConnection = null;
         socket.emit('estado-conexion', { status: 'desconectado' });
@@ -435,8 +476,6 @@ io.on('connection', (socket) => {
         const textoComando = config.textoComando || '!tts';
         const palabrasProhibidas = config.palabrasProhibidas || [];
         const idiomaVoz = config.idiomaVoz || 'es';
-
-        console.log(`📡 Conectando a ${username} con licencia ${config.licenseKey} (Idioma: ${idiomaVoz}, Leer Emojis: ${leerEmojis})`);
         
         if (tiktokLiveConnection) {
             try { tiktokLiveConnection.disconnect(); } catch (e) {}
@@ -444,30 +483,21 @@ io.on('connection', (socket) => {
 
         tiktokLiveConnection = new TikTokLiveConnection(username, {});
         let tiempoDeInicio = Date.now();
-
         let intentosReconexion = 0;
         const maxIntentos = 5;
 
         function conectarConReintento() {
             tiktokLiveConnection.connect().then(state => {
-                console.log(`✅ Conectado a la sala de ${username} (Room ID: ${state.roomId})`);
                 socket.emit('estado-conexion', { status: 'conectado', room: state.roomId });
                 intentosReconexion = 0;
             }).catch(err => {
-                console.error(`❌ Error al conectar con ${username} (Intento ${intentosReconexion + 1}/${maxIntentos}):`, err.message);
-                
                 if (intentosReconexion < maxIntentos) {
                     intentosReconexion++;
                     let tiempoEspera = Math.min(10000 * Math.pow(2, intentosReconexion - 1), 60000);
-                    
-                    console.log(`⏳ Reintentando conexión en ${tiempoEspera / 1000} segundos...`);
-                    socket.emit('estado-conexion', { status: 'error', message: `Protección anti-bloqueo. Reintentando en ${tiempoEspera / 1000}s...` });
-
-                    setTimeout(() => {
-                        conectarConReintento();
-                    }, tiempoEspera);
+                    socket.emit('estado-conexion', { status: 'error', message: `Reintentando en ${tiempoEspera / 1000}s...` });
+                    setTimeout(() => conectarConReintento(), tiempoEspera);
                 } else {
-                    socket.emit('estado-conexion', { status: 'error', message: 'Límite de reintentos alcanzado. Posible bloqueo temporal.' });
+                    socket.emit('estado-conexion', { status: 'error', message: 'Límite de reintentos alcanzado.' });
                 }
             });
         }
@@ -478,9 +508,7 @@ io.on('connection', (socket) => {
             const usernameLike = limpiarTexto(data.user ? data.user.nickname : 'Anonimo', leerEmojis);
             const count = data.likeCount || 1;
 
-            if (!rankingLikes[usernameLike]) {
-                rankingLikes[usernameLike] = 0;
-            }
+            if (!rankingLikes[usernameLike]) rankingLikes[usernameLike] = 0;
             rankingLikes[usernameLike] += count;
 
             const topLikes = Object.entries(rankingLikes)
@@ -498,12 +526,7 @@ io.on('connection', (socket) => {
             const mensajeLimpio = limpiarTexto(data.content, leerEmojis);
             const nombreLimpio = limpiarTexto(data.user.nickname, leerEmojis);
 
-            if (mensajeLimpio === '') return;
-
-            if (contienePalabraProhibida(mensajeLimpio, palabrasProhibidas)) {
-                console.log(`🚫 Mensaje de ${nombreLimpio} omitido por palabra prohibida.`);
-                return;
-            }
+            if (mensajeLimpio === '' || contienePalabraProhibida(mensajeLimpio, palabrasProhibidas)) return;
 
             const esSeguidor = data.followInfo && data.followInfo.following === true;
             const esModerator = data.isModerator === true;
@@ -514,7 +537,6 @@ io.on('connection', (socket) => {
                 if (rolesConfig.seguidores && esSeguidor) autorizado = true;
                 if (rolesConfig.moderadores && esModerator) autorizado = true;
                 if (rolesConfig.suscriptores && esSubscriptor) autorizado = true;
-
                 if (!autorizado) return;
             }
 
@@ -523,7 +545,6 @@ io.on('connection', (socket) => {
             if (tipoComentario === 'comando' && !mensajeLimpio.startsWith(textoComando)) return;
 
             let textoALeer = leerNombre ? `${nombreLimpio} dice ${mensajeLimpio}` : mensajeLimpio;
-
             generarYEnviarAudio(socket, textoALeer, nombreLimpio, mensajeLimpio, false, null, idiomaVoz);
         });
 
@@ -538,29 +559,22 @@ io.on('connection', (socket) => {
                 const textoAlerta = `Gracias por seguirnos, ${nombreLimpio}`;
                 const mensajeVisual = `¡${nombreLimpio} comenzó a seguir el directo! 🎉`;
                 let customSoundUrl = guardarAudioBase64(alertas.soundFollow);
-
                 generarYEnviarAudio(socket, textoAlerta, "ALERTA TIKTOK", mensajeVisual, true, customSoundUrl, idiomaVoz);
             }
         });
 
         tiktokLiveConnection.on('gift', data => {
             const alertas = configuracionCliente ? configuracionCliente.alertas : { gift: true };
-            if (!alertas.gift) return;
-
-            if (data.giftType === 1 && !data.repeatEnd) {
-                return;
-            }
+            if (!alertas.gift || (data.giftType === 1 && !data.repeatEnd)) return;
 
             const nombreLimpio = limpiarTexto(data.user.nickname, leerEmojis);
             const nombreRegalo = data.giftName || (data.gift && data.gift.name) || 'un regalo';
             const cantidad = data.repeatCount || 1;
-            const diamantesPerUnit = (data.diamondCount !== undefined) ? data.diamondCount : ((data.gift && data.gift.diamondCount) || 0);
-            const diamantes = diamantesPerUnit * cantidad;
+            const diamantes = ((data.diamondCount !== undefined) ? data.diamondCount : ((data.gift && data.gift.diamondCount) || 0)) * cantidad;
 
             const textoAlerta = `${nombreLimpio} envió ${cantidad} ${nombreRegalo}`;
             const mensajeVisual = `🎁 ¡${nombreLimpio} envió ${cantidad}x ${nombreRegalo} (${diamantes} diamantes)!`;
             let customSoundUrl = guardarAudioBase64(alertas.soundGift);
-
             generarYEnviarAudio(socket, textoAlerta, "REGALO", mensajeVisual, true, customSoundUrl, idiomaVoz);
         });
     });
@@ -572,22 +586,16 @@ io.on('connection', (socket) => {
         if (claveLicenciaAsociada && sesionesActivasPorLicencia[claveLicenciaAsociada] === socket.id) {
             delete sesionesActivasPorLicencia[claveLicenciaAsociada];
         }
-        console.log(`🔴 Cliente desconectado: ${socket.id}`);
     });
 });
 
 function generarYEnviarAudio(socket, textoALeer, usuario, mensajeVisual, esAlerta, customSoundUrl, idiomaVoz) {
-    console.log(`🔊 [TTS - ${idiomaVoz}] ${textoALeer}`);
-
     const nombreArchivo = `tts_${Date.now()}_${Math.random().toString(36).substring(7)}.mp3`;
     const rutaArchivo = path.join(dirTemp, nombreArchivo);
 
     const speech = new gTTS(textoALeer, idiomaVoz || 'es');
     speech.save(rutaArchivo, (err) => {
-        if (err) {
-            console.error("❌ Error al generar gTTS:", err);
-            return;
-        }
+        if (err) return;
 
         socket.emit('reproducir-audio', {
             soundUrl: customSoundUrl,
@@ -606,13 +614,8 @@ function generarYEnviarAudio(socket, textoALeer, usuario, mensajeVisual, esAlert
 }
 
 const RENDER_URL = 'https://bot-tiktok-cloud.onrender.com';
-
 setInterval(() => {
-    https.get(RENDER_URL, (res) => {
-        console.log(`⏰ [Keep-Alive] Ping enviado. Código: ${res.statusCode}`);
-    }).on('error', (err) => {
-        console.error(`❌ [Keep-Alive] Error en el ping:`, err.message);
-    });
+    https.get(RENDER_URL, (res) => {}).on('error', (err) => {});
 }, 300000);
 
 const PORT = process.env.PORT || 3000;
