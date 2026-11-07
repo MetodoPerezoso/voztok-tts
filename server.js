@@ -286,7 +286,7 @@ app.get('/admin', (req, res) => {
 
 const verificarAdmin = (req, res, next) => {
     const pass = req.headers['x-admin-pass'] || req.body.pass;
-    const ADMIN_SECRET = process.env.ADMIN_SECRET || "metodoperezoso2026"; 
+    const ADMIN_SECRET = process.env.ADMIN_SECRET || "perezoso"; 
     if (pass === ADMIN_SECRET) next();
     else res.status(403).json({ error: "No autorizado" });
 };
