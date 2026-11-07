@@ -124,7 +124,7 @@
             padding: 20px;
             box-sizing: border-box;
             justify-content: center;
-            align-items: stretch; /* Estira todas las tarjetas para que midan exactamente la misma altura */
+            align-items: stretch;
         }
         .card { 
             background: #1e293b; 
@@ -139,12 +139,10 @@
             box-sizing: border-box;
         }
 
-        /* Tarjeta derecha más ancha y alineada en altura */
         .card-wide {
             width: 440px !important;
         }
 
-        /* Columna Central */
         .columna-central {
             width: 380px;
             display: flex;
@@ -247,7 +245,6 @@
         }
         .btn-test:hover { background: #475569; }
 
-        /* Estilos de los botones del Soundboard en 2 columnas */
         .btn-soundboard {
             background: #0284c7;
             font-size: 11px;
@@ -300,7 +297,6 @@
         .footer-brand a { color: #38bdf8; text-decoration: none; }
         .footer-brand a:hover { text-decoration: underline; }
 
-        /* Scroll exclusivo del Chat en Vivo */
         #chatFeed {
             overflow-y: auto;
             flex-grow: 1;
@@ -347,7 +343,7 @@
             
             <div class="form-group">
                 <div class="password-wrapper">
-                    <input type="password" id="licenseKeyInput" placeholder="Ingresa tu clave de acceso">
+                    <input type="password" id="licenseKeyInput" placeholder="Ingresa tu clave (ej: VOZ-PRO-2026)">
                     <button type="button" class="toggle-password" onclick="togglePasswordVisibility()" title="Ver/Ocultar licencia">
                         👁️
                     </button>
@@ -490,7 +486,7 @@
                 </div>
             </div>
 
-            <!-- PANEL 3: ALERTAS Y SONIDOS (DERECHA - ALTURA Y ANCHO AJUSTADOS) -->
+            <!-- PANEL 3: ALERTAS Y SONIDOS (DERECHA) -->
             <div class="card card-wide">
                 <h2>⚡ Alertas y Sonidos</h2>
                 
@@ -621,7 +617,8 @@
             }
         });
 
-        let currentLicenseKey = '';
+        // RECUPERAR LICENCIA GUARDADA AUTOMÁTICAMENTE EN EL NAVEGADOR
+        let currentLicenseKey = localStorage.getItem('voztok_license_key') || '';
         let colaAudios = [];
         let estaReproduciendoAudio = false;
         let volumenGlobal = 1.0;
@@ -654,6 +651,9 @@
         socket.on('respuesta-licencia', (data) => {
             if (data.valida) {
                 currentLicenseKey = data.key;
+                // GUARDAR LICENCIA EN EL NAVEGADOR PARA FUTURAS SESIONES
+                localStorage.setItem('voztok_license_key', data.key);
+
                 document.getElementById('loginOverlay').style.display = 'none';
                 document.getElementById('mainApp').style.display = 'flex';
                 
@@ -661,12 +661,15 @@
                     document.getElementById('infoLicencia').innerText = `🔑 ${data.expiracion}`;
                 }
             } else {
+                // Si la licencia guardada falló o venció, la borramos del navegador
+                localStorage.removeItem('voztok_license_key');
                 document.getElementById('loginError').innerText = data.mensaje || "Clave de acceso inválida o vencida.";
             }
         });
 
         socket.on('sesion-expulsada', (data) => {
             alert(data.mensaje || "Tu clave de acceso fue abierta en otro dispositivo.");
+            localStorage.removeItem('voztok_license_key');
             location.reload();
         });
 
@@ -782,6 +785,13 @@
         }
 
         document.addEventListener('DOMContentLoaded', () => {
+            // SI YA HABÍA UNA LICENCIA GUARDADA, INTENTAR VALIDARLA AUTOMÁTICAMENTE AL ABRIR
+            if (currentLicenseKey) {
+                document.getElementById('licenseKeyInput').value = currentLicenseKey;
+                document.getElementById('loginError').innerText = "Verificando licencia guardada...";
+                socket.emit('validar-licencia', { key: currentLicenseKey });
+            }
+
             for (let i = 1; i <= 10; i++) {
                 const savedAudio = localStorage.getItem(`soundboard_audio_${i}`);
                 const savedName = localStorage.getItem(`soundboard_name_${i}`);
