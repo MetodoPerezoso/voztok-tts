@@ -1,5 +1,5 @@
 const express = require('express');
-const http = require('http');
+const http = http = require('http');
 const { Server } = require('socket.io');
 const cors = require('cors');
 const { TikTokLiveConnection } = require('tiktok-live-connector');
@@ -601,6 +601,19 @@ io.on('connection', (socket) => {
 
             let textoALeer = leerNombre ? `${nombreLimpio} dice ${mensajeLimpio}` : mensajeLimpio;
             generarYEnviarAudio(socket, textoALeer, nombreLimpio, mensajeLimpio, false, null, idiomaVoz);
+        });
+
+        // Evento específico para capturar nuevos seguidores de forma directa y robusta
+        tiktokLiveConnection.on('follow', data => {
+            const alertas = configuracionCliente ? configuracionCliente.alertas : { follow: true };
+            if (!alertas.follow) return;
+
+            const nombreLimpio = limpiarTexto(data.user ? data.user.nickname : 'Espectador', leerEmojis);
+            const textoAlerta = `Gracias por seguirnos, ${nombreLimpio}`;
+            const mensajeVisual = `¡${nombreLimpio} comenzó a seguir el directo! 🎉`;
+            let customSoundUrl = guardarAudioBase64(alertas.soundFollow);
+            
+            generarYEnviarAudio(socket, textoAlerta, "ALERTA TIKTOK", mensajeVisual, true, customSoundUrl, idiomaVoz);
         });
 
         tiktokLiveConnection.on('social', data => {
