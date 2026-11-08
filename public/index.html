@@ -597,20 +597,40 @@
             timeout: 20000
         });
 
-        // DESBLOQUEO GLOBAL DE AUDIO PARA iOS (SAFARI / BRAVE)
-        let audioDesbloqueadoIOS = false;
+        // DESBLOQUEO DEFINITIVO DE AUDIO PARA iOS (SAFARI / BRAVE)
+        let audioContextIOS = null;
         function desbloquearAudioIOS() {
-            if (audioDesbloqueadoIOS) return;
+            if (!audioContextIOS) {
+                const AudioContext = window.AudioContext || window.webkitAudioContext;
+                if (AudioContext) {
+                    audioContextIOS = new AudioContext();
+                    audioContextIOS.resume();
+                }
+            }
             try {
                 const audioMudo = new Audio();
                 audioMudo.src = "data:audio/mp3;base64,SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjU3LjgzL19hbGxhAAA=";
-                audioMudo.play().then(() => {
-                    audioDesbloqueadoIOS = true;
-                    console.log("🔊 Audio desbloqueado para iOS correctamente.");
-                }).catch(e => {
-                    console.log("Esperando interacción física para desbloquear audio...");
-                });
+                audioMudo.play().catch(() => {});
             } catch (err) {}
+        }
+
+        // CONVERTIDOR DE BASE64 A BLOB URL (Crucial para iOS Safari)
+        function base64ToBlobUrl(base64Data) {
+            try {
+                if (!base64Data || !base64Data.includes(';base64,')) return base64Data;
+                const parts = base64Data.split(';base64,');
+                const contentType = parts[0].split(':')[1] || 'audio/mp3';
+                const raw = window.atob(parts[1]);
+                const rawLength = raw.length;
+                const uInt8Array = new Uint8Array(rawLength);
+                for (let i = 0; i < rawLength; ++i) {
+                    uInt8Array[i] = raw.charCodeAt(i);
+                }
+                const blob = new Blob([uInt8Array], { type: contentType });
+                return URL.createObjectURL(blob);
+            } catch (e) {
+                return base64Data;
+            }
         }
 
         document.addEventListener("visibilitychange", () => {
@@ -860,6 +880,15 @@
                 alert("Primero selecciona un archivo de audio para este canal con el botón [⚙️].");
                 return;
             }
+
+            // Reproducción local adaptada a Blob URL para iOS
+            const blobUrl = base64ToBlobUrl(soundBase64);
+            const audioLocal = new Audio(blobUrl);
+            audioLocal.volume = volumenGlobal;
+            audioLocal.play().catch(err => {
+                console.log("Error al reproducir sonido local en iOS:", err);
+            });
+
             socket.emit('reproducir-efecto-rapido', { customSound: soundBase64 });
         }
 
@@ -908,7 +937,7 @@
 
             if (!ttsSilenciado) {
                 if (data.soundUrl) {
-                    colaAudios.push({ url: data.soundUrl, isCustomSound: true });
+                    colaAudios.push({ url: base64ToBlobUrl(data.soundUrl), isCustomSound: true });
                 }
 
                 if (data.audioUrl) {
