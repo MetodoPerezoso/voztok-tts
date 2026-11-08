@@ -335,7 +335,7 @@
 </head>
 <body>
 
-    <!-- REPRODUCTOR NATIVO OCULTO PARA DESBLOQUEAR iOS (Safari / Brave) -->
+    <!-- REPRODUCTOR NATIVO OCULTO PARA DESBLOQUEAR iOS -->
     <audio id="reproductorNativo" style="display:none;" preload="auto"></audio>
 
     <div id="loginOverlay">
@@ -607,14 +607,11 @@
                 reproductor.src = "data:audio/mp3;base64,SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjU3LjgzL19hbGxhAAA=";
                 reproductor.play().then(() => {
                     reproductor.pause();
-                    console.log("🔊 Canal nativo de iOS desbloqueado correctamente.");
-                }).catch(e => {
-                    console.log("Esperando toque físico en iOS...");
-                });
+                }).catch(e => {});
             }
         }
 
-        // CONVERTIDOR DE BASE64 A BLOB URL (Crucial para iOS Safari y Brave)
+        // CONVERTIDOR DE BASE64 A BLOB URL (Evita restricciones de Safari / Brave en iOS)
         function base64ToBlobUrl(base64Data) {
             try {
                 if (!base64Data || !base64Data.includes(';base64,')) return base64Data;
@@ -653,7 +650,6 @@
             }
         });
 
-        // RECUPERAR LICENCIA GUARDADA AUTOMÁTICAMENTE EN EL NAVEGADOR
         let currentLicenseKey = localStorage.getItem('voztok_license_key') || '';
         let colaAudios = [];
         let estaReproduciendoAudio = false;
@@ -674,7 +670,7 @@
         }
 
         function validarLicencia() {
-            desbloquearAudioIOS(); // Desbloquea iOS al presionar el botón de ingreso
+            desbloquearAudioIOS();
             const key = document.getElementById('licenseKeyInput').value.trim();
             const errorDiv = document.getElementById('loginError');
             if (!key) {
@@ -740,7 +736,7 @@
         }
 
         async function conectarBot() {
-            desbloquearAudioIOS(); // Desbloquea iOS al presionar Conectar Bot
+            desbloquearAudioIOS();
             const btnConectar = document.getElementById('btnConectarBot');
 
             if (estaConectadoBot) {
@@ -871,6 +867,7 @@
             }
         });
 
+        // REPRODUCCIÓN DEL SOUNDBOARD (Unificada y limpia: solo avisa al servidor por socket)
         async function reproducirEfectoDirecto(idInput) {
             desbloquearAudioIOS();
             const canalNum = idInput.replace('sound', '');
@@ -881,7 +878,7 @@
                 return;
             }
 
-            // ÚNICA LLAMADA AL SOCKET (Evita el doble sonido en Android)
+            // Envía al servidor para que se reproduzca limpiamente a través de la cola general
             socket.emit('reproducir-efecto-rapido', { customSound: soundBase64 });
         }
 
