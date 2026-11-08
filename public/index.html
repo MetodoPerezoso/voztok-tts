@@ -656,6 +656,7 @@
         let volumenGlobal = 1.0;
         let ttsSilenciado = false;
         let estaConectadoBot = false;
+        let currentAudioElement = null; // Referencia directa al audio en reproducción para control instantáneo
 
         function togglePasswordVisibility() {
             const inputKey = document.getElementById('licenseKeyInput');
@@ -707,6 +708,10 @@
         function actualizarVolumen(valor) {
             document.getElementById('volValue').innerText = valor;
             volumenGlobal = valor / 100;
+            // Si hay un audio sonando actualmente, actualiza su volumen al instante
+            if (currentAudioElement) {
+                currentAudioElement.volume = volumenGlobal;
+            }
         }
 
         function toggleMuteTTS() {
@@ -716,6 +721,13 @@
                 btn.innerText = "🔇 Muteado";
                 btn.style.background = "#ef4444";
                 colaAudios = [];
+                // Detiene de inmediato el audio que esté sonando en este instante
+                if (currentAudioElement) {
+                    currentAudioElement.pause();
+                    currentAudioElement.currentTime = 0;
+                    currentAudioElement = null;
+                }
+                estaReproduciendoAudio = false;
             } else {
                 btn.innerText = "🔊 Voz Activa";
                 btn.style.background = "#334155";
@@ -867,7 +879,6 @@
             }
         });
 
-        // REPRODUCCIÓN DEL SOUNDBOARD (Unificada: únicamente envía el evento al servidor para evitar duplicados en Android)
         async function reproducirEfectoDirecto(idInput) {
             desbloquearAudioIOS();
             const canalNum = idInput.replace('sound', '');
@@ -961,6 +972,7 @@
 
             const audio = new Audio(itemAudio.url);
             audio.volume = volumenGlobal;
+            currentAudioElement = audio; // Asigna referencia activa
 
             audio.play().catch(err => {
                 console.log("Error al reproducir audio:", err);
@@ -968,11 +980,13 @@
             });
 
             audio.onended = () => {
-                audio.remove(); // Libera la memoria RAM del dispositivo móvil
+                currentAudioElement = null;
+                audio.remove();
                 siguienteAudio();
             };
 
             audio.onerror = () => {
+                currentAudioElement = null;
                 audio.remove();
                 siguienteAudio();
             };

@@ -476,16 +476,21 @@ io.on('connection', (socket) => {
             customSoundUrl = guardarAudioBase64(data.customSound);
         }
 
+        const alertasConfig = configuracionCliente ? configuracionCliente.alertas : { follow: true, gift: true };
+        let enviarVoz = true;
+
         if (data.tipo === 'follow') {
+            if (alertasConfig.follow === false) enviarVoz = false;
             textoAlerta = "Gracias por seguirnos, Espectador de Prueba";
             mensajeVisual = "¡Espectador de Prueba comenzó a seguir el directo! 🎉 (Prueba)";
         } else if (data.tipo === 'gift') {
+            if (alertasConfig.gift === false) enviarVoz = false;
             textoAlerta = "Espectador de Prueba envió 5 Rosas";
             mensajeVisual = "🎁 ¡Espectador de Prueba envió 5x Rosas (50 diamantes)! (Prueba)";
         }
 
         if (textoAlerta) {
-            generarYEnviarAudio(socket, textoAlerta, "ALERTA PRUEBA", mensajeVisual, true, customSoundUrl, idiomaVoz);
+            generarYEnviarAudio(socket, enviarVoz ? textoAlerta : null, "ALERTA PRUEBA", mensajeVisual, true, customSoundUrl, idiomaVoz);
         }
     });
 
@@ -603,46 +608,42 @@ io.on('connection', (socket) => {
             generarYEnviarAudio(socket, textoALeer, nombreLimpio, mensajeLimpio, false, null, idiomaVoz);
         });
 
-        // Evento específico para capturar nuevos seguidores de forma directa y robusta
+        // Evento específico para seguidores con independencia de voz/sonido
         tiktokLiveConnection.on('follow', data => {
             const alertas = configuracionCliente ? configuracionCliente.alertas : { follow: true };
-            if (!alertas.follow) return;
-
             const nombreLimpio = limpiarTexto(data.user ? data.user.nickname : 'Espectador', leerEmojis);
-            const textoAlerta = `Gracias por seguirnos, ${nombreLimpio}`;
             const mensajeVisual = `¡${nombreLimpio} comenzó a seguir el directo! 🎉`;
             let customSoundUrl = guardarAudioBase64(alertas.soundFollow);
+            let textoAlerta = alertas.follow ? `Gracias por seguirnos, ${nombreLimpio}` : null;
             
             generarYEnviarAudio(socket, textoAlerta, "ALERTA TIKTOK", mensajeVisual, true, customSoundUrl, idiomaVoz);
         });
 
         tiktokLiveConnection.on('social', data => {
             const alertas = configuracionCliente ? configuracionCliente.alertas : { follow: true };
-            if (!alertas.follow) return;
-
             const nombreLimpio = limpiarTexto(data.user.nickname, leerEmojis);
             const esSeguir = data.displayType && data.displayType.includes('follow');
 
             if (esSeguir || data.actionId === 3) {
-                const textoAlerta = `Gracias por seguirnos, ${nombreLimpio}`;
                 const mensajeVisual = `¡${nombreLimpio} comenzó a seguir el directo! 🎉`;
                 let customSoundUrl = guardarAudioBase64(alertas.soundFollow);
+                let textoAlerta = alertas.follow ? `Gracias por seguirnos, ${nombreLimpio}` : null;
                 generarYEnviarAudio(socket, textoAlerta, "ALERTA TIKTOK", mensajeVisual, true, customSoundUrl, idiomaVoz);
             }
         });
 
         tiktokLiveConnection.on('gift', data => {
             const alertas = configuracionCliente ? configuracionCliente.alertas : { gift: true };
-            if (!alertas.gift || (data.giftType === 1 && !data.repeatEnd)) return;
+            if (data.giftType === 1 && !data.repeatEnd) return;
 
             const nombreLimpio = limpiarTexto(data.user.nickname, leerEmojis);
             const nombreRegalo = data.giftName || (data.gift && data.gift.name) || 'un regalo';
             const cantidad = data.repeatCount || 1;
             const diamantes = ((data.diamondCount !== undefined) ? data.diamondCount : ((data.gift && data.gift.diamondCount) || 0)) * cantidad;
 
-            const textoAlerta = `${nombreLimpio} envió ${cantidad} ${nombreRegalo}`;
             const mensajeVisual = `🎁 ¡${nombreLimpio} envió ${cantidad}x ${nombreRegalo} (${diamantes} diamantes)!`;
             let customSoundUrl = guardarAudioBase64(alertas.soundGift);
+            let textoAlerta = alertas.gift ? `${nombreLimpio} envió ${cantidad} ${nombreRegalo}` : null;
             generarYEnviarAudio(socket, textoAlerta, "REGALO", mensajeVisual, true, customSoundUrl, idiomaVoz);
         });
     });
@@ -658,6 +659,18 @@ io.on('connection', (socket) => {
 });
 
 function generarYEnviarAudio(socket, textoALeer, usuario, mensajeVisual, esAlerta, customSoundUrl, idiomaVoz) {
+    if (!textoALeer) {
+        // Si no hay texto (voz desactivada), envía directo el sonido o mensaje visual
+        socket.emit('reproducir-audio', {
+            soundUrl: customSoundUrl,
+            audioUrl: null,
+            usuario: usuario,
+            mensaje: mensajeVisual,
+            esAlerta: esAlerta
+        });
+        return;
+    }
+
     const nombreArchivo = `tts_${Date.now()}_${Math.random().toString(36).substring(7)}.mp3`;
     const rutaArchivo = path.join(dirTemp, nombreArchivo);
 
