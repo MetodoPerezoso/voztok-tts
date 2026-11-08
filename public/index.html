@@ -507,7 +507,7 @@
                     </div>
                     <label style="font-size:13px; color:#94a3b8; margin-top:6px;">Audio personalizado (MP3/WAV):</label>
 		    <input type="file" id="soundGift" accept=".mp3, .wav, audio/*">
-		    <button class="btn-test" onclick="probarAlerta('gift')">🧪 Probar Regalo</button>>
+		    <button class="btn-test" onclick="probarAlerta('gift')">🧪 Probar Regalo</button>
                 </div>
 
                 <!-- SOUNDBOARD EN 2 COLUMNAS -->
@@ -597,6 +597,22 @@
             timeout: 20000
         });
 
+        // DESBLOQUEO GLOBAL DE AUDIO PARA iOS (SAFARI / BRAVE)
+        let audioDesbloqueadoIOS = false;
+        function desbloquearAudioIOS() {
+            if (audioDesbloqueadoIOS) return;
+            try {
+                const audioMudo = new Audio();
+                audioMudo.src = "data:audio/mp3;base64,SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjU3LjgzL19hbGxhAAA=";
+                audioMudo.play().then(() => {
+                    audioDesbloqueadoIOS = true;
+                    console.log("🔊 Audio desbloqueado para iOS correctamente.");
+                }).catch(e => {
+                    console.log("Esperando interacción física para desbloquear audio...");
+                });
+            } catch (err) {}
+        }
+
         document.addEventListener("visibilitychange", () => {
             if (document.visibilityState === "visible") {
                 if (!socket.connected) {
@@ -638,6 +654,7 @@
         }
 
         function validarLicencia() {
+            desbloquearAudioIOS(); // Desbloquea iOS al presionar el botón de ingreso
             const key = document.getElementById('licenseKeyInput').value.trim();
             const errorDiv = document.getElementById('loginError');
             if (!key) {
@@ -651,7 +668,6 @@
         socket.on('respuesta-licencia', (data) => {
             if (data.valida) {
                 currentLicenseKey = data.key;
-                // GUARDAR LICENCIA EN EL NAVEGADOR PARA FUTURAS SESIONES
                 localStorage.setItem('voztok_license_key', data.key);
 
                 document.getElementById('loginOverlay').style.display = 'none';
@@ -661,7 +677,6 @@
                     document.getElementById('infoLicencia').innerText = `🔑 ${data.expiracion}`;
                 }
             } else {
-                // Si la licencia guardada falló o venció, la borramos del navegador
                 localStorage.removeItem('voztok_license_key');
                 document.getElementById('loginError').innerText = data.mensaje || "Clave de acceso inválida o vencida.";
             }
@@ -705,6 +720,7 @@
         }
 
         async function conectarBot() {
+            desbloquearAudioIOS(); // Desbloquea iOS al presionar Conectar Bot
             const btnConectar = document.getElementById('btnConectarBot');
 
             if (estaConectadoBot) {
@@ -775,6 +791,7 @@
         }
 
         async function probarAlerta(tipo) {
+            desbloquearAudioIOS();
             let soundBase64 = await obtenerArchivoBase64(tipo === 'follow' ? 'soundFollow' : 'soundGift');
             let idiomaVoz = document.getElementById('idiomaVoz').value;
             socket.emit('probar-alerta', { tipo: tipo, customSound: soundBase64, idioma: idiomaVoz });
@@ -785,7 +802,6 @@
         }
 
         document.addEventListener('DOMContentLoaded', () => {
-            // SI YA HABÍA UNA LICENCIA GUARDADA, INTENTAR VALIDARLA AUTOMÁTICAMENTE AL ABRIR
             if (currentLicenseKey) {
                 document.getElementById('licenseKeyInput').value = currentLicenseKey;
                 document.getElementById('loginError').innerText = "Verificando licencia guardada...";
@@ -836,6 +852,7 @@
         });
 
         async function reproducirEfectoDirecto(idInput) {
+            desbloquearAudioIOS();
             const canalNum = idInput.replace('sound', '');
             let soundBase64 = window[`audioBase64_${canalNum}`] || await obtenerArchivoBase64(idInput);
 
@@ -862,7 +879,6 @@
             }
         });
 
-        // Actualizar el Ranking de Actividad
         socket.on('actualizar-ranking-likes', (topLikes) => {
             const container = document.getElementById('listaRankingPanel');
             if (!container) return;
@@ -929,7 +945,7 @@
             audio.volume = volumenGlobal;
 
             audio.play().catch(err => {
-                console.log("Error al reproducir audio:", err);
+                console.log("Error al reproducir audio (posible bloqueo de iOS):", err);
                 siguienteAudio();
             });
 
