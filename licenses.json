@@ -8,7 +8,7 @@
         "expiracion": "2026-07-15"
     },
     "prueba": {
-        "activa": false,
+        "activa": true,
         "expiracion": null
     },
     "VZ-ANX-DS6": {
