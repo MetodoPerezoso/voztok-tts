@@ -335,6 +335,9 @@
 </head>
 <body>
 
+    <!-- REPRODUCTOR NATIVO OCULTO PARA DESBLOQUEAR iOS (Safari / Brave) -->
+    <audio id="reproductorNativo" style="display:none;" preload="auto"></audio>
+
     <div id="loginOverlay">
         <div class="login-card">
             <img src="/icon.png" alt="Voztok Logo" class="login-logo">
@@ -597,24 +600,21 @@
             timeout: 20000
         });
 
-        // DESBLOQUEO DEFINITIVO DE AUDIO PARA iOS (SAFARI / BRAVE)
-        let audioContextIOS = null;
+        // DESBLOQUEO NATIVO PARA iOS (Usa el elemento oculto del HTML)
         function desbloquearAudioIOS() {
-            if (!audioContextIOS) {
-                const AudioContext = window.AudioContext || window.webkitAudioContext;
-                if (AudioContext) {
-                    audioContextIOS = new AudioContext();
-                    audioContextIOS.resume();
-                }
+            const reproductor = document.getElementById('reproductorNativo');
+            if (reproductor) {
+                reproductor.src = "data:audio/mp3;base64,SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjU3LjgzL19hbGxhAAA=";
+                reproductor.play().then(() => {
+                    reproductor.pause();
+                    console.log("🔊 Canal nativo de iOS desbloqueado correctamente.");
+                }).catch(e => {
+                    console.log("Esperando toque físico en iOS...");
+                });
             }
-            try {
-                const audioMudo = new Audio();
-                audioMudo.src = "data:audio/mp3;base64,SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjU3LjgzL19hbGxhAAA=";
-                audioMudo.play().catch(() => {});
-            } catch (err) {}
         }
 
-        // CONVERTIDOR DE BASE64 A BLOB URL (Crucial para iOS Safari)
+        // CONVERTIDOR DE BASE64 A BLOB URL (Crucial para iOS Safari y Brave)
         function base64ToBlobUrl(base64Data) {
             try {
                 if (!base64Data || !base64Data.includes(';base64,')) return base64Data;
@@ -881,14 +881,7 @@
                 return;
             }
 
-            // Reproducción local adaptada a Blob URL para iOS
-            const blobUrl = base64ToBlobUrl(soundBase64);
-            const audioLocal = new Audio(blobUrl);
-            audioLocal.volume = volumenGlobal;
-            audioLocal.play().catch(err => {
-                console.log("Error al reproducir sonido local en iOS:", err);
-            });
-
+            // ÚNICA LLAMADA AL SOCKET (Evita el doble sonido en Android)
             socket.emit('reproducir-efecto-rapido', { customSound: soundBase64 });
         }
 
@@ -974,7 +967,7 @@
             audio.volume = volumenGlobal;
 
             audio.play().catch(err => {
-                console.log("Error al reproducir audio (posible bloqueo de iOS):", err);
+                console.log("Error al reproducir audio:", err);
                 siguienteAudio();
             });
 
