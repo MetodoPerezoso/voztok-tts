@@ -650,7 +650,10 @@ function generarYEnviarAudio(socket, textoALeer, usuario, mensajeVisual, esAlert
 
     const speech = new gTTS(textoALeer, idiomaVoz || 'es');
     speech.save(rutaArchivo, (err) => {
-        if (err) return;
+        if (err) {
+            console.error("❌ Error generando gTTS:", err);
+            return;
+        }
 
         socket.emit('reproducir-audio', {
             soundUrl: customSoundUrl,
@@ -664,7 +667,7 @@ function generarYEnviarAudio(socket, textoALeer, usuario, mensajeVisual, esAlert
             try {
                 if (fs.existsSync(rutaArchivo)) fs.unlinkSync(rutaArchivo);
             } catch (e) {}
-        }, 15000);
+        }, 20000);
     });
 }
 
