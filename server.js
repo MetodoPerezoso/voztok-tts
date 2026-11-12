@@ -383,11 +383,8 @@ function limpiarTexto(texto, permitirEmojis = false) {
     if (!texto) return '';
 
     if (permitirEmojis) {
-        let textoProcesado = texto.replace(/\[([a-zA-Z0-9_]+)\]/g, (match, tag) => {
-            const tagMin = tag.toLowerCase();
-            return mapaEmojisTikTok[tagMin] ? ` ${mapaEmojisTikTok[tagMin]} ` : '';
-        });
-        return textoProcesado.trim();
+        let textoModificado = texto.replace(/\[laughcry\]/gi, 'lafcray');
+        return textoModificado.trim();
     }
 
     let textoSinTags = texto.replace(/\[[a-zA-Z0-9_]+\]/g, '');
@@ -527,6 +524,13 @@ io.on('connection', (socket) => {
             return;
         }
 
+        // ==========================================
+        // 🔄 REINICIO AUTOMÁTICO DEL RANKING AL CAMBIAR DE CUENTA
+        // ==========================================
+        rankingLikes = {};
+        io.emit('actualizar-ranking-likes', []);
+        // ==========================================
+
         configuracionCliente = config;
         const username = config.username;
         const leerNombre = config.leerNombre;
@@ -542,6 +546,7 @@ io.on('connection', (socket) => {
         }
 
         tiktokLiveConnection = new TikTokLiveConnection(username, {});
+
         let tiempoDeInicio = Date.now();
         let intentosReconexion = 0;
         const maxIntentos = 5;
@@ -550,6 +555,11 @@ io.on('connection', (socket) => {
             tiktokLiveConnection.connect().then(state => {
                 socket.emit('estado-conexion', { status: 'conectado', room: state.roomId });
                 intentosReconexion = 0;
+
+                // 🚀 SALUDO DE BIENVIENIDA AUTOMÁTICO AL CONECTAR CON ÉXITO
+                const mensajeBienvenida = `Iniciando sistema Voztok para el canal de ${username}. Conexión establecida.`;
+                generarYEnviarAudio(socket, mensajeBienvenida, "VOZTOK AI", "🤖 " + mensajeBienvenida, true, null, idiomaVoz);
+
             }).catch(err => {
                 if (intentosReconexion < maxIntentos) {
                     intentosReconexion++;
@@ -564,19 +574,38 @@ io.on('connection', (socket) => {
 
         conectarConReintento();
 
+        let timeoutActualizacionLikes = null;
+
         tiktokLiveConnection.on('like', data => {
             const usernameLike = limpiarTexto(data.user ? data.user.nickname : 'Anonimo', leerEmojis);
-            const count = data.likeCount || 1;
+            
+            const count = parseInt(data.likeCount) || 1;
 
-            if (!rankingLikes[usernameLike]) rankingLikes[usernameLike] = 0;
-            rankingLikes[usernameLike] += count;
+            let avatarUrl = '';
+            if (data.user && data.user.avatarThumb && data.user.avatarThumb.urlList && data.user.avatarThumb.urlList.length > 0) {
+                avatarUrl = data.user.avatarThumb.urlList[0];
+            }
 
-            const topLikes = Object.entries(rankingLikes)
-                .sort((a, b) => b[1] - a[1])
-                .slice(0, 5)
-                .map(([user, likes]) => ({ user, likes }));
+            if (!rankingLikes[usernameLike]) {
+                rankingLikes[usernameLike] = { likes: 0, avatar: avatarUrl };
+            }
+            
+            rankingLikes[usernameLike].likes += count;
+            
+            if (avatarUrl) {
+                rankingLikes[usernameLike].avatar = avatarUrl;
+            }
 
-            io.emit('actualizar-ranking-likes', topLikes);
+            if (timeoutActualizacionLikes) clearTimeout(timeoutActualizacionLikes);
+            
+            timeoutActualizacionLikes = setTimeout(() => {
+                const topLikes = Object.entries(rankingLikes)
+                    .sort((a, b) => b[1].likes - a[1].likes)
+                    .slice(0, 5)
+                    .map(([user, info]) => ({ user, likes: info.likes, avatar: info.avatar }));
+
+                io.emit('actualizar-ranking-likes', topLikes);
+            }, 300);
         });
 
         tiktokLiveConnection.on('chat', data => {
@@ -584,21 +613,31 @@ io.on('connection', (socket) => {
             if (tiempoMensaje < tiempoDeInicio) return;
 
             const mensajeLimpio = limpiarTexto(data.content, leerEmojis);
-            const nombreLimpio = limpiarTexto(data.user.nickname, leerEmojis);
+            const nombreLimpio = limpiarTexto(data.user ? data.user.nickname : 'Espectador', leerEmojis);
 
             if (mensajeLimpio === '' || contienePalabraProhibida(mensajeLimpio, palabrasProhibidas)) return;
 
-            const esSeguidor = data.followInfo && data.followInfo.following === true;
-            const esModerator = data.isModerator === true;
-            const esSubscriptor = data.user.userBadges && data.user.userBadges.some(b => b.url && b.url.includes('sub'));
+            const esSeguidor = (data.userIdentity && data.userIdentity.isFollowerOfAnchor === true) ||
+                               (data.followInfo && data.followInfo.following === true) || 
+                               (data.isFollowing === true) ||
+                               (data.user && data.user.followInfo && data.user.followInfo.following === true);
+
+            const esModerator = (data.userIdentity && data.userIdentity.isModeratorOfAnchor === true) || 
+                                (data.isModerator === true) || 
+                                (data.user && data.user.userRole === 2);
+            
+            const badgeList = (data.user && data.user.badgeList) || [];
+            const esClubDeFans = badgeList.some(badge => badge.sceneType === 10);
 
             if (!rolesConfig.todos) {
                 let autorizado = false;
                 if (rolesConfig.seguidores && esSeguidor) autorizado = true;
                 if (rolesConfig.moderadores && esModerator) autorizado = true;
-                if (rolesConfig.suscriptores && esSubscriptor) autorizado = true;
+                if (rolesConfig.suscriptores && esClubDeFans) autorizado = true;
                 if (!autorizado) return;
             }
+
+            if (rolesConfig.suscriptores && !rolesConfig.todos && !esClubDeFans) return;
 
             if (tipoComentario === 'punto' && !mensajeLimpio.startsWith('.')) return;
             if (tipoComentario === 'barra' && !mensajeLimpio.startsWith('/')) return;
@@ -608,7 +647,6 @@ io.on('connection', (socket) => {
             generarYEnviarAudio(socket, textoALeer, nombreLimpio, mensajeLimpio, false, null, idiomaVoz);
         });
 
-        // Evento específico para seguidores con independencia de voz/sonido
         tiktokLiveConnection.on('follow', data => {
             const alertas = configuracionCliente ? configuracionCliente.alertas : { follow: true };
             const nombreLimpio = limpiarTexto(data.user ? data.user.nickname : 'Espectador', leerEmojis);
@@ -621,7 +659,7 @@ io.on('connection', (socket) => {
 
         tiktokLiveConnection.on('social', data => {
             const alertas = configuracionCliente ? configuracionCliente.alertas : { follow: true };
-            const nombreLimpio = limpiarTexto(data.user.nickname, leerEmojis);
+            const nombreLimpio = limpiarTexto(data.user ? data.user.nickname : 'Espectador', leerEmojis);
             const esSeguir = data.displayType && data.displayType.includes('follow');
 
             if (esSeguir || data.actionId === 3) {
@@ -636,7 +674,7 @@ io.on('connection', (socket) => {
             const alertas = configuracionCliente ? configuracionCliente.alertas : { gift: true };
             if (data.giftType === 1 && !data.repeatEnd) return;
 
-            const nombreLimpio = limpiarTexto(data.user.nickname, leerEmojis);
+            const nombreLimpio = limpiarTexto(data.user ? data.user.nickname : 'Espectador', leerEmojis);
             const nombreRegalo = data.giftName || (data.gift && data.gift.name) || 'un regalo';
             const cantidad = data.repeatCount || 1;
             const diamantes = ((data.diamondCount !== undefined) ? data.diamondCount : ((data.gift && data.gift.diamondCount) || 0)) * cantidad;
@@ -660,7 +698,6 @@ io.on('connection', (socket) => {
 
 function generarYEnviarAudio(socket, textoALeer, usuario, mensajeVisual, esAlerta, customSoundUrl, idiomaVoz) {
     if (!textoALeer) {
-        // Si no hay texto (voz desactivada), envía directo el sonido o mensaje visual
         socket.emit('reproducir-audio', {
             soundUrl: customSoundUrl,
             audioUrl: null,
