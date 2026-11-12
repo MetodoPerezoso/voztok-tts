@@ -366,7 +366,7 @@
         <div class="container">
             <!-- PANEL 1: CONFIGURACIÓN GENERAL (IZQUIERDA) -->
             <div class="card">
-                <h2>🤖 Voztok TTS</h2>
+                <h2>🤖 Voztok TTS v1.1</h2>
 
                 <div class="form-group">
                     <label for="idiomaVoz">Acento / Voz Sintética:</label>
@@ -403,7 +403,7 @@
                     </div>
                     <div class="checkbox-group">
                         <input type="checkbox" id="rolSuscriptores">
-                        <label for="rolSuscriptores" style="margin-bottom:0; cursor:pointer;">Suscriptores / Subscriptores</label>
+                        <label for="rolSuscriptores" style="margin-bottom:0; cursor:pointer;">Club de Fans (Suscriptores)</label>
                     </div>
                 </div>
 
@@ -656,7 +656,7 @@
         let volumenGlobal = 1.0;
         let ttsSilenciado = false;
         let estaConectadoBot = false;
-        let currentAudioElement = null; // Referencia directa al audio en reproducción para control instantáneo
+        let currentAudioElement = null;
 
         function togglePasswordVisibility() {
             const inputKey = document.getElementById('licenseKeyInput');
@@ -708,7 +708,6 @@
         function actualizarVolumen(valor) {
             document.getElementById('volValue').innerText = valor;
             volumenGlobal = valor / 100;
-            // Si hay un audio sonando actualmente, actualiza su volumen al instante
             if (currentAudioElement) {
                 currentAudioElement.volume = volumenGlobal;
             }
@@ -721,7 +720,6 @@
                 btn.innerText = "🔇 Muteado";
                 btn.style.background = "#ef4444";
                 colaAudios = [];
-                // Detiene de inmediato el audio que esté sonando en este instante
                 if (currentAudioElement) {
                     currentAudioElement.pause();
                     currentAudioElement.currentTime = 0;
@@ -734,17 +732,19 @@
             }
         }
 
-        function obtenerArchivoBase64(inputId) {
-            return new Promise((resolve) => {
-                const fileInput = document.getElementById(inputId);
-                if (fileInput.files && fileInput.files[0]) {
+        async function obtenerArchivoBase64(inputId) {
+            const fileInput = document.getElementById(inputId);
+            if (fileInput.files && fileInput.files[0]) {
+                return new Promise((resolve) => {
                     const reader = new FileReader();
                     reader.onload = function(e) { resolve(e.target.result); };
                     reader.readAsDataURL(fileInput.files[0]);
-                } else {
-                    resolve(null);
-                }
-            });
+                });
+            } else {
+                if (inputId === 'soundFollow') return window.soundFollowBase64Global || null;
+                if (inputId === 'soundGift') return window.soundGiftBase64Global || null;
+                return null;
+            }
         }
 
         async function conectarBot() {
@@ -836,6 +836,48 @@
                 socket.emit('validar-licencia', { key: currentLicenseKey });
             }
 
+            // RECUPERAR PERSISTENCIA DE ALERTAS
+            const savedFollowAudio = localStorage.getItem('voztok_follow_audio');
+            if (savedFollowAudio) {
+                window.soundFollowBase64Global = savedFollowAudio;
+            }
+
+            const savedGiftAudio = localStorage.getItem('voztok_gift_audio');
+            if (savedGiftAudio) {
+                window.soundGiftBase64Global = savedGiftAudio;
+            }
+
+            const inputFollow = document.getElementById('soundFollow');
+            if (inputFollow) {
+                inputFollow.addEventListener('change', function() {
+                    if (this.files && this.files[0]) {
+                        const file = this.files[0];
+                        const reader = new FileReader();
+                        reader.onload = function(e) {
+                            window.soundFollowBase64Global = e.target.result;
+                            localStorage.setItem('voztok_follow_audio', e.target.result);
+                        };
+                        reader.readAsDataURL(file);
+                    }
+                });
+            }
+
+            const inputGift = document.getElementById('soundGift');
+            if (inputGift) {
+                inputGift.addEventListener('change', function() {
+                    if (this.files && this.files[0]) {
+                        const file = this.files[0];
+                        const reader = new FileReader();
+                        reader.onload = function(e) {
+                            window.soundGiftBase64Global = e.target.result;
+                            localStorage.setItem('voztok_gift_audio', e.target.result);
+                        };
+                        reader.readAsDataURL(file);
+                    }
+                });
+            }
+
+            // Carga de botones del Soundboard
             for (let i = 1; i <= 10; i++) {
                 const savedAudio = localStorage.getItem(`soundboard_audio_${i}`);
                 const savedName = localStorage.getItem(`soundboard_name_${i}`);
@@ -964,6 +1006,7 @@
             }
         });
 
+        // REPRODUCTOR DE AUDIO ESTÁNDAR (VOLUMEN NATIVO Y CLARO SIN FILTROS)
         function procesarColaAudios() {
             if (ttsSilenciado || estaReproduciendoAudio || colaAudios.length === 0) return;
 
@@ -972,7 +1015,7 @@
 
             const audio = new Audio(itemAudio.url);
             audio.volume = volumenGlobal;
-            currentAudioElement = audio; // Asigna referencia activa
+            currentAudioElement = audio;
 
             audio.play().catch(err => {
                 console.log("Error al reproducir audio:", err);
