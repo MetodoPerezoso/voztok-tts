@@ -1,7 +1,8 @@
 {
     "@mariaeugeniabal": {
         "activa": true,
-        "expiracion": "2026-11-30"
+        "expiracion": "2026-11-30",
+        "nota": "Euge"
     },
     "juan@gmail.com": {
         "activa": true,
@@ -14,6 +15,6 @@
     "VZ-ANX-DS6": {
         "activa": true,
         "expiracion": "2027-02-05",
-        "nota": "Disponible"
+        "nota": "@laimonba (limontiktok)"
     }
 }
