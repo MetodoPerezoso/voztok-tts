@@ -434,7 +434,7 @@
         <div class="login-card">
             <img src="/icon.png" alt="Voztok Logo" class="login-logo">
             <h2>Voztok</h2>
-            <p>Método Perezoso™ &bull; Acceso a TikTok TTS</p>
+            <p>Método Perezoso™ • Acceso a TikTok TTS</p>
             
             <div class="form-group">
                 <div class="password-wrapper">
@@ -449,7 +449,7 @@
             <div id="loginError"></div>
             
             <div class="footer-brand" style="margin-top: 25px;">
-                Protegido por licencia exclusiva &copy; 2026
+                Protegido por licencia exclusiva © 2026
             </div>
         </div>
     </div>
@@ -537,7 +537,7 @@
                 </div>
 
                 <div class="footer-brand" style="margin-top: 10px;">
-                    Creado por Rodri para<br><strong>Voztok (Método Perezoso™)</strong> &copy; 2026
+                    Creado por Rodri para<br><strong>Voztok (Método Perezoso™)</strong> © 2026
                 </div>
             </div>
 
@@ -909,7 +909,8 @@
                 return;
             }
             errorDiv.innerText = "Validando licencia...";
-            socket.emit('validar-licencia', { key: key });
+            // 🟢 Marcamos esPanelControl: true para identificar que esta sesión es el panel principal
+            socket.emit('validar-licencia', { key: key, esPanelControl: true });
         }
 
         socket.on('respuesta-licencia', (data) => {
@@ -1069,7 +1070,8 @@
             if (currentLicenseKey) {
                 document.getElementById('licenseKeyInput').value = currentLicenseKey;
                 document.getElementById('loginError').innerText = "Verificando licencia guardada...";
-                socket.emit('validar-licencia', { key: currentLicenseKey });
+                // 🟢 Al reconectarse automáticamente por persistencia, también indicamos que es el panel principal
+                socket.emit('validar-licencia', { key: currentLicenseKey, esPanelControl: true });
             }
 
             // RECUPERAR PERSISTENCIA DE ALERTAS (Sin borrar al desmarcar el checkbox)

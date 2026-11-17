@@ -327,7 +327,7 @@ function contienePalabraProhibida(texto, listaProhibidas) {
     const textoMin = texto.toLowerCase();
     return listaProhibidas.some(palabra => {
         const pLimpia = palabra.trim().toLowerCase();
-        return pLimpia.length > 0 && textoMin.includes(pLino => pLimpia); // Corregido leve sintaxis
+        return pLimpia.length > 0 && textoMin.includes(pLimpia);
     });
 }
 
@@ -370,14 +370,18 @@ io.on('connection', (socket) => {
 
             claveLicenciaAsociada = key;
             
-            // 🟢 UNIR ESTE SOCKET A LA SALA PRIVADA EXCLUSIVA DE SU LICENCIA (Sirve tanto para el panel como para la ruleta OBS)
+            // 🟢 Unir este socket a la sala privada exclusiva de su licencia (Ruleta o Panel)
             socket.join(`sala_${key}`);
 
-            const socketAnteriorId = sesionesActivasPorLicencia[key];
-            if (socketAnteriorId && socketAnteriorId !== socket.id) {
-                io.to(socketAnteriorId).emit('sesion-expulsada', { mensaje: "Tu clave de acceso fue abierta en otro dispositivo." });
+            // ⚠️ EXCLUSIÓN INTELIGENTE: Solo controlamos sesión única si viene explícitamente del panel principal
+            if (data.esPanelControl === true) {
+                const socketAnteriorId = sesionesActivasPorLicencia[key];
+                if (socketAnteriorId && socketAnteriorId !== socket.id) {
+                    io.to(socketAnteriorId).emit('sesion-expulsada', { mensaje: "Tu clave de acceso fue abierta en otro dispositivo." });
+                }
+                sesionesActivasPorLicencia[key] = socket.id;
             }
-            sesionesActivasPorLicencia[key] = socket.id;
+
             socket.emit('respuesta-licencia', { valida: true, key: key, expiracion: expiracionTexto });
         } else {
             socket.emit('respuesta-licencia', { valida: false, mensaje: "Clave incorrecta o inactiva." });
@@ -432,7 +436,6 @@ io.on('connection', (socket) => {
             return;
         }
 
-        // Aseguramos que la clave de licencia asociada quede sincronizada en este ámbito también
         claveLicenciaAsociada = config.licenseKey;
         socket.join(`sala_${config.licenseKey}`);
 
@@ -563,7 +566,7 @@ io.on('connection', (socket) => {
             let customSoundUrl = guardarAudioBase64(alertas.soundGift);
             let textoAlerta = alertas.gift ? `${nombreLimpio} envió ${cantidad} ${nombreRegalo}` : null;
             
-            // 🎡 DISPARAR RULETA ÚNICAMENTE A LA SALA PRIVADA DE ESTA LICENCIA
+            // 🎡 Disparar ruleta únicamente a la sala privada de esta licencia
             if (claveLicenciaAsociada) {
                 io.to(`sala_${claveLicenciaAsociada}`).emit('girar-ruleta', {
                     usuario: nombreLimpio,
@@ -606,7 +609,7 @@ function generarYEnviarAudio(socket, textoALeer, usuario, mensajeVisual, esAlert
     });
 }
 
-// Limpieza automática de la carpeta temp cada 10 minutos para evitar acumulación local
+// Limpieza automática de la carpeta temp cada 10 minutos
 setInterval(() => {
     fs.readdir(dirTemp, (err, files) => {
         if (err) return;
@@ -614,7 +617,7 @@ setInterval(() => {
         files.forEach(file => {
             const filePath = path.join(dirTemp, file);
             fs.stat(filePath, (err, stats) => {
-                if (!err && (ahora - stats.mtimeMs > 60000 * 5)) { // Archivos de más de 5 mins
+                if (!err && (ahora - stats.mtimeMs > 60000 * 5)) {
                     try { fs.unlinkSync(filePath); } catch(e){}
                 }
             });
