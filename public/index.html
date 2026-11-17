@@ -529,11 +529,11 @@
                     </div>
                 </div>
 
-                <!-- Botón para abrir la Ruleta Integrada -->
+                <!-- 🎡 BOTÓN DINÁMICO PARA ABRIR LA RULETA CON LA LICENCIA INYECTADA AUTOMÁTICAMENTE -->
                 <div style="margin-top: 12px; padding-top: 10px; border-top: 1px dashed #334155;">
-                    <a href="https://metodoperezoso.github.io/Ruleta-Interactiva/" target="_blank" style="display: flex; align-items: center; justify-content: center; gap: 6px; width: 100%; padding: 10px; font-size: 13px; border-radius: 8px; background: linear-gradient(90deg, #38bdf8, #0284c7); color: #0f172a; font-weight: bold; text-decoration: none; box-sizing: border-box; transition: opacity 0.2s;" onmouseover="this.style.opacity='0.9'" onmouseout="this.style.opacity='1'">
+                    <button type="button" onclick="abrirRuletaUsuario()" style="display: flex; align-items: center; justify-content: center; gap: 6px; width: 100%; padding: 12px; font-size: 13px; border-radius: 8px; background: linear-gradient(90deg, #38bdf8, #0284c7); color: #0f172a; font-weight: bold; border: none; cursor: pointer; box-sizing: border-box; transition: opacity 0.2s;" onmouseover="this.style.opacity='0.9'" onmouseout="this.style.opacity='1'">
                         🎡 Abrir Ruleta Interactiva
-                    </a>
+                    </button>
                 </div>
 
                 <div class="footer-brand" style="margin-top: 10px;">
@@ -813,6 +813,16 @@
             document.querySelectorAll('.guia-tab-btn').forEach(btn => btn.classList.remove('active'));
             document.getElementById('tab-' + tabId).classList.add('active');
             btnElement.classList.add('active');
+        }
+
+        // 🎡 FUNCIÓN PARA ABRIR LA RULETA INYECTANDO LA LICENCIA ACTIVA AUTOMÁTICAMENTE
+        function abrirRuletaUsuario() {
+            if (!currentLicenseKey) {
+                alert("Por favor, ingresa y valida tu licencia primero.");
+                return;
+            }
+            const urlRuleta = `https://metodoperezoso.github.io/Ruleta-Interactiva/?key=${encodeURIComponent(currentLicenseKey)}`;
+            window.open(urlRuleta, '_blank');
         }
 
         // DESBLOQUEO NATIVO PARA iOS (Usa el elemento oculto del HTML)

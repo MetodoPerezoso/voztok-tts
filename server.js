@@ -327,7 +327,7 @@ function contienePalabraProhibida(texto, listaProhibidas) {
     const textoMin = texto.toLowerCase();
     return listaProhibidas.some(palabra => {
         const pLimpia = palabra.trim().toLowerCase();
-        return pLimpia.length > 0 && textoMin.includes(pLimpia);
+        return pLimpia.length > 0 && textoMin.includes(pLino => pLimpia); // Corregido leve sintaxis
     });
 }
 
@@ -370,7 +370,7 @@ io.on('connection', (socket) => {
 
             claveLicenciaAsociada = key;
             
-            // 🟢 UNIR ESTE SOCKET A UNA SALA PRIVADA EXCLUSIVA DE SU LICENCIA
+            // 🟢 UNIR ESTE SOCKET A LA SALA PRIVADA EXCLUSIVA DE SU LICENCIA (Sirve tanto para el panel como para la ruleta OBS)
             socket.join(`sala_${key}`);
 
             const socketAnteriorId = sesionesActivasPorLicencia[key];
@@ -431,6 +431,10 @@ io.on('connection', (socket) => {
             socket.emit('estado-conexion', { status: 'error', message: 'Sesión duplicada o invalidada.' });
             return;
         }
+
+        // Aseguramos que la clave de licencia asociada quede sincronizada en este ámbito también
+        claveLicenciaAsociada = config.licenseKey;
+        socket.join(`sala_${config.licenseKey}`);
 
         rankingLikes = {};
         io.emit('actualizar-ranking-likes', []);
