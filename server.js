@@ -369,6 +369,10 @@ io.on('connection', (socket) => {
             }
 
             claveLicenciaAsociada = key;
+            
+            // 🟢 UNIR ESTE SOCKET A UNA SALA PRIVADA EXCLUSIVA DE SU LICENCIA
+            socket.join(`sala_${key}`);
+
             const socketAnteriorId = sesionesActivasPorLicencia[key];
             if (socketAnteriorId && socketAnteriorId !== socket.id) {
                 io.to(socketAnteriorId).emit('sesion-expulsada', { mensaje: "Tu clave de acceso fue abierta en otro dispositivo." });
@@ -555,13 +559,15 @@ io.on('connection', (socket) => {
             let customSoundUrl = guardarAudioBase64(alertas.soundGift);
             let textoAlerta = alertas.gift ? `${nombreLimpio} envió ${cantidad} ${nombreRegalo}` : null;
             
-            // 🎡 DISPARAR RULETA EN TIEMPO REAL A TODOS LOS CLIENTES CONECTADOS
-            io.emit('girar-ruleta', {
-                usuario: nombreLimpio,
-                regalo: nombreRegalo,
-                cantidad: cantidad,
-                diamantes: diamantes
-            });
+            // 🎡 DISPARAR RULETA ÚNICAMENTE A LA SALA PRIVADA DE ESTA LICENCIA
+            if (claveLicenciaAsociada) {
+                io.to(`sala_${claveLicenciaAsociada}`).emit('girar-ruleta', {
+                    usuario: nombreLimpio,
+                    regalo: nombreRegalo,
+                    cantidad: cantidad,
+                    diamantes: diamantes
+                });
+            }
 
             generarYEnviarAudio(socket, textoAlerta, "REGALO", mensajeVisual, true, customSoundUrl, idiomaVoz);
         });
