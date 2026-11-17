@@ -48,25 +48,17 @@ cargarLicencias();
 async function guardarLicenciasEnGitHub(nuevoObjetoLicencias) {
     licenciasValidas = nuevoObjetoLicencias;
     const filePath = path.join(__dirname, 'licenses.json');
-    
     fs.writeFileSync(filePath, JSON.stringify(licenciasValidas, null, 4), 'utf8');
 
-    if (!GITHUB_TOKEN || !GITHUB_REPO) {
-        console.log("⚠️ GITHUB_TOKEN o GITHUB_REPO no configurados.");
-        return;
-    }
+    if (!GITHUB_TOKEN || !GITHUB_REPO) return;
 
     try {
         const contenidoBase64 = Buffer.from(JSON.stringify(licenciasValidas, null, 4)).toString('base64');
-        
         const getOptions = {
             hostname: 'api.github.com',
             path: `/repos/${GITHUB_REPO}/contents/licenses.json`,
             method: 'GET',
-            headers: {
-                'User-Agent': 'Voztok-SaaS',
-                'Authorization': `Bearer ${GITHUB_TOKEN}`
-            }
+            headers: { 'User-Agent': 'Voztok-SaaS', 'Authorization': `Bearer ${GITHUB_TOKEN}` }
         };
 
         let fileSha = '';
@@ -105,22 +97,14 @@ async function guardarLicenciasEnGitHub(nuevoObjetoLicencias) {
 
         await new Promise((resolve, reject) => {
             const req = https.request(putOptions, (res) => {
-                if (res.statusCode === 200 || res.statusCode === 201) {
-                    console.log("☁️ Licencias sincronizadas y guardadas en GitHub exitosamente.");
-                    resolve();
-                } else {
-                    res.on('data', d => console.error("❌ Error API GitHub:", d.toString()));
-                    reject();
-                }
+                if (res.statusCode === 200 || res.statusCode === 201) resolve();
+                else reject();
             });
-            req.on('error', e => reject(e));
+            req.on('error', () => reject());
             req.write(payload);
             req.end();
         });
-
-    } catch (err) {
-        console.error("❌ Error al conectar con GitHub API:", err);
-    }
+    } catch (err) {}
 }
 
 app.get('/widget-likes', (req, res) => {
@@ -174,13 +158,13 @@ app.get('/admin', (req, res) => {
                 </div>
             </div>
             <div class="card">
-                <h3>⚡ Generar Nuevas Licencias (Formato VZ-XXX-XXX)</h3>
+                <h3>⚡ Generar Nuevas Licencias</h3>
                 <label>Cantidad:</label>
                 <input type="number" id="cantidadGen" value="5" min="1" max="50">
-                <button class="btn-green" onclick="generarLoteAdmin()">Crear y Guardar en GitHub</button>
+                <button class="btn-green" onclick="generarLoteAdmin()">Crear y Guardar</button>
             </div>
             <div class="card">
-                <h3>📋 Licencias Registradas en el Sistema</h3>
+                <h3>📋 Licencias Registradas</h3>
                 <button onclick="cargarLicencias()">🔄 Cargar / Actualizar Lista</button>
                 <div class="table-container">
                     <table>
@@ -203,13 +187,8 @@ app.get('/admin', (req, res) => {
                 function togglePasswordVisibility() {
                     const inputKey = document.getElementById('adminPass');
                     const btnToggle = document.querySelector('.toggle-password');
-                    if (inputKey.type === 'password') {
-                        inputKey.type = 'text';
-                        btnToggle.innerText = '🙈';
-                    } else {
-                        inputKey.type = 'password';
-                        btnToggle.innerText = '👁️';
-                    }
+                    if (inputKey.type === 'password') { inputKey.type = 'text'; btnToggle.innerText = '🙈'; }
+                    else { inputKey.type = 'password'; btnToggle.innerText = '👁️'; }
                 }
                 async function cargarLicencias() {
                     const pass = document.getElementById('adminPass').value;
@@ -221,14 +200,11 @@ app.get('/admin', (req, res) => {
                     for (const [key, info] of Object.entries(data)) {
                         const activaChecked = info.activa ? 'checked' : '';
                         const estadoBadge = info.activa ? '<span class="badge-activo">Activa</span>' : '<span class="badge-inactivo">Inactiva</span>';
-                        const fechaVal = info.expiracion || '';
-                        const notaVal = info.nota || '';
-
                         const tr = document.createElement('tr');
-                        tr.innerHTML = '<td><code style="color: #38bdf8; font-size: 13px; font-weight: bold;">' + key + '</code></td>' +
-                            '<td><label style="cursor:pointer; font-size: 12px;"><input type="checkbox" ' + activaChecked + ' onchange="toggleActiva(\\'' + key + '\\', this.checked)" style="width:auto; cursor:pointer;"> ' + estadoBadge + '</label></td>' +
-                            '<td><input type="date" class="input-fecha" value="' + fechaVal + '" onchange="guardarFecha(\\'' + key + '\\', this.value)"></td>' +
-                            '<td><input type="text" class="input-nota" value="' + notaVal + '" placeholder="Ej: @usuario" onchange="guardarNota(\\'' + key + '\\', this.value)"></td>' +
+                        tr.innerHTML = '<td><code style="color: #38bdf8; font-weight: bold;">' + key + '</code></td>' +
+                            '<td><label style="cursor:pointer;"><input type="checkbox" ' + activaChecked + ' onchange="toggleActiva(\\'' + key + '\\', this.checked)" style="width:auto;"> ' + estadoBadge + '</label></td>' +
+                            '<td><input type="date" class="input-fecha" value="' + (info.expiracion || '') + '" onchange="guardarFecha(\\'' + key + '\\', this.value)"></td>' +
+                            '<td><input type="text" class="input-nota" value="' + (info.nota || '') + '" onchange="guardarNota(\\'' + key + '\\', this.value)"></td>' +
                             '<td><button onclick="extenderLicencia(\\'' + key + '\\')" style="padding: 5px; font-size: 11px; background: #0284c7; width: auto;">+30 Días</button></td>';
                         tbody.appendChild(tr);
                     }
@@ -236,47 +212,30 @@ app.get('/admin', (req, res) => {
                 async function generarLoteAdmin() {
                     const pass = document.getElementById('adminPass').value;
                     const cantidad = document.getElementById('cantidadGen').value;
-                    const res = await fetch('/api/admin/generar', {
+                    await fetch('/api/admin/generar', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json', 'x-admin-pass': pass },
                         body: JSON.stringify({ cantidad: parseInt(cantidad) })
                     });
-                    if(res.status === 403) { alert("Contraseña incorrecta"); return; }
-                    alert("¡Lote generado y guardado en GitHub con éxito!");
+                    alert("¡Lote generado con éxito!");
                     cargarLicencias();
                 }
                 async function extenderLicencia(key) {
                     const pass = document.getElementById('adminPass').value;
-                    await fetch('/api/admin/extender', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json', 'x-admin-pass': pass },
-                        body: JSON.stringify({ key })
-                    });
+                    await fetch('/api/admin/extender', { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-admin-pass': pass }, body: JSON.stringify({ key }) });
                     cargarLicencias();
                 }
                 async function toggleActiva(key, activa) {
                     const pass = document.getElementById('adminPass').value;
-                    await fetch('/api/admin/actualizar-estado', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json', 'x-admin-pass': pass },
-                        body: JSON.stringify({ key, activa })
-                    });
+                    await fetch('/api/admin/actualizar-estado', { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-admin-pass': pass }, body: JSON.stringify({ key, activa }) });
                 }
                 async function guardarNota(key, nota) {
                     const pass = document.getElementById('adminPass').value;
-                    await fetch('/api/admin/actualizar-nota', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json', 'x-admin-pass': pass },
-                        body: JSON.stringify({ key, nota })
-                    });
+                    await fetch('/api/admin/actualizar-nota', { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-admin-pass': pass }, body: JSON.stringify({ key, nota }) });
                 }
                 async function guardarFecha(key, expiracion) {
                     const pass = document.getElementById('adminPass').value;
-                    await fetch('/api/admin/actualizar-fecha', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json', 'x-admin-pass': pass },
-                        body: JSON.stringify({ key, expiracion })
-                    });
+                    await fetch('/api/admin/actualizar-fecha', { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-admin-pass': pass }, body: JSON.stringify({ key, expiracion }) });
                 }
             </script>
         </body>
@@ -291,27 +250,20 @@ const verificarAdmin = (req, res, next) => {
     else res.status(403).json({ error: "No autorizado" });
 };
 
-app.get('/api/admin/licencias', verificarAdmin, (req, res) => {
-    cargarLicencias();
-    res.json(licenciasValidas);
-});
-
+app.get('/api/admin/licencias', verificarAdmin, (req, res) => { cargarLicencias(); res.json(licenciasValidas); });
 app.post('/api/admin/generar', express.json(), verificarAdmin, async (req, res) => {
     const cantidad = req.body.cantidad || 5;
     cargarLicencias();
     const conjuntoExistentes = new Set(Object.keys(licenciasValidas));
-
     const generarBloque = (longitud = 3) => {
         const caracteres = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
         let resStr = '';
         for (let i = 0; i < longitud; i++) resStr += caracteres.charAt(Math.floor(Math.random() * caracteres.length));
         return resStr;
     };
-
     const fechaFutura = new Date();
     fechaFutura.setDate(fechaFutura.getDate() + 90);
     const fechaStr = fechaFutura.toISOString().split('T')[0];
-
     let creadas = 0;
     while (creadas < cantidad) {
         const nuevaClave = `VZ-${generarBloque(3)}-${generarBloque(3)}`;
@@ -321,7 +273,6 @@ app.post('/api/admin/generar', express.json(), verificarAdmin, async (req, res) 
             creadas++;
         }
     }
-
     await guardarLicenciasEnGitHub(licenciasValidas);
     res.json({ success: true, total: Object.keys(licenciasValidas).length });
 });
@@ -338,7 +289,6 @@ app.post('/api/admin/extender', express.json(), verificarAdmin, async (req, res)
         baseDate.setDate(baseDate.getDate() + 30);
         licenciasValidas[key].expiracion = baseDate.toISOString().split('T')[0];
         licenciasValidas[key].activa = true;
-
         await guardarLicenciasEnGitHub(licenciasValidas);
         return res.json({ success: true, nuevaExpiracion: licenciasValidas[key].expiracion });
     }
@@ -348,47 +298,28 @@ app.post('/api/admin/extender', express.json(), verificarAdmin, async (req, res)
 app.post('/api/admin/actualizar-estado', express.json(), verificarAdmin, async (req, res) => {
     const { key, activa } = req.body;
     cargarLicencias();
-    if (licenciasValidas[key]) {
-        licenciasValidas[key].activa = activa;
-        await guardarLicenciasEnGitHub(licenciasValidas);
-        return res.json({ success: true });
-    }
+    if (licenciasValidas[key]) { licenciasValidas[key].activa = activa; await guardarLicenciasEnGitHub(licenciasValidas); return res.json({ success: true }); }
     res.status(404).json({ error: "No encontrada" });
 });
 
 app.post('/api/admin/actualizar-nota', express.json(), verificarAdmin, async (req, res) => {
     const { key, nota } = req.body;
     cargarLicencias();
-    if (licenciasValidas[key]) {
-        licenciasValidas[key].nota = nota;
-        await guardarLicenciasEnGitHub(licenciasValidas);
-        return res.json({ success: true });
-    }
+    if (licenciasValidas[key]) { licenciasValidas[key].nota = nota; await guardarLicenciasEnGitHub(licenciasValidas); return res.json({ success: true }); }
     res.status(404).json({ error: "No encontrada" });
 });
 
 app.post('/api/admin/actualizar-fecha', express.json(), verificarAdmin, async (req, res) => {
     const { key, expiracion } = req.body;
     cargarLicencias();
-    if (licenciasValidas[key]) {
-        licenciasValidas[key].expiracion = expiracion || null;
-        await guardarLicenciasEnGitHub(licenciasValidas);
-        return res.json({ success: true });
-    }
+    if (licenciasValidas[key]) { licenciasValidas[key].expiracion = expiracion || null; await guardarLicenciasEnGitHub(licenciasValidas); return res.json({ success: true }); }
     res.status(404).json({ error: "No encontrada" });
 });
-// ==========================================
 
 function limpiarTexto(texto, permitirEmojis = false) {
     if (!texto) return '';
-
-    if (permitirEmojis) {
-        let textoModificado = texto.replace(/\[laughcry\]/gi, 'lafcray');
-        return textoModificado.trim();
-    }
-
-    let textoSinTags = texto.replace(/\[[a-zA-Z0-9_]+\]/g, '');
-    return textoSinTags.replace(/[\u{1F600}-\u{1F64F}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6FF}\u{1F700}-\u{1F77F}\u{1F780}-\u{1F7FF}\u{1F800}-\u{1F8FF}\u{1F900}-\u{1F9FF}\u{1FA00}-\u{1FA6F}\u{1FA70}-\u{1FAFF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}]/gu, '').trim();
+    if (permitirEmojis) return texto.replace(/\[laughcry\]/gi, 'lafcray').trim();
+    return texto.replace(/\[[a-zA-Z0-9_]+\]/g, '').replace(/[\u{1F600}-\u{1F64F}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6FF}\u{1F700}-\u{1F77F}\u{1F780}-\u{1F7FF}\u{1F800}-\u{1F8FF}\u{1F900}-\u{1F9FF}\u{1FA00}-\u{1FA6F}\u{1FA70}-\u{1FAFF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}]/gu, '').trim();
 }
 
 function contienePalabraProhibida(texto, listaProhibidas) {
@@ -405,15 +336,12 @@ function guardarAudioBase64(base64Data) {
     try {
         const matches = base64Data.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
         if (!matches || matches.length !== 3) return null;
-
         const buffer = Buffer.from(matches[2], 'base64');
         const nombreArchivo = `custom_${Date.now()}_${Math.random().toString(36).substring(7)}.mp3`;
         const rutaArchivo = path.join(dirTemp, nombreArchivo);
-
         fs.writeFileSync(rutaArchivo, buffer);
         return `/temp/${nombreArchivo}`;
     } catch (e) {
-        console.error("❌ Error al guardar archivo de audio personalizado:", e);
         return null;
     }
 }
@@ -426,7 +354,6 @@ io.on('connection', (socket) => {
     socket.on('validar-licencia', (data) => {
         const key = data.key ? data.key.trim() : '';
         cargarLicencias();
-
         const licencia = licenciasValidas[key];
 
         if (licencia && licencia.activa) {
@@ -434,7 +361,6 @@ io.on('connection', (socket) => {
             if (licencia.expiracion) {
                 const fechaActual = new Date();
                 const fechaExpiracion = new Date(licencia.expiracion + 'T23:59:59');
-
                 if (fechaActual > fechaExpiracion) {
                     socket.emit('respuesta-licencia', { valida: false, mensaje: "Tu clave de acceso ha expirado." });
                     return;
@@ -443,21 +369,12 @@ io.on('connection', (socket) => {
             }
 
             claveLicenciaAsociada = key;
-
             const socketAnteriorId = sesionesActivasPorLicencia[key];
             if (socketAnteriorId && socketAnteriorId !== socket.id) {
-                io.to(socketAnteriorId).emit('sesion-expulsada', { 
-                    mensaje: "Tu clave de acceso fue abierta en otro dispositivo." 
-                });
+                io.to(socketAnteriorId).emit('sesion-expulsada', { mensaje: "Tu clave de acceso fue abierta en otro dispositivo." });
             }
-
             sesionesActivasPorLicencia[key] = socket.id;
-
-            socket.emit('respuesta-licencia', { 
-                valida: true, 
-                key: key, 
-                expiracion: expiracionTexto 
-            });
+            socket.emit('respuesta-licencia', { valida: true, key: key, expiracion: expiracionTexto });
         } else {
             socket.emit('respuesta-licencia', { valida: false, mensaje: "Clave incorrecta o inactiva." });
         }
@@ -466,13 +383,8 @@ io.on('connection', (socket) => {
     socket.on('probar-alerta', (data) => {
         let textoAlerta = '';
         let mensajeVisual = '';
-        let customSoundUrl = null;
+        let customSoundUrl = data.customSound ? guardarAudioBase64(data.customSound) : null;
         const idiomaVoz = data.idioma || 'es';
-
-        if (data.customSound) {
-            customSoundUrl = guardarAudioBase64(data.customSound);
-        }
-
         const alertasConfig = configuracionCliente ? configuracionCliente.alertas : { follow: true, gift: true };
         let enviarVoz = true;
 
@@ -494,20 +406,12 @@ io.on('connection', (socket) => {
     socket.on('reproducir-efecto-rapido', (data) => {
         if (data.customSound) {
             let customSoundUrl = guardarAudioBase64(data.customSound);
-            socket.emit('reproducir-audio', {
-                soundUrl: customSoundUrl,
-                audioUrl: null,
-                usuario: "SOUNDBOARD",
-                mensaje: "⚡ Efecto de sonido rápido activado",
-                esAlerta: true
-            });
+            socket.emit('reproducir-audio', { soundUrl: customSoundUrl, audioUrl: null, usuario: "SOUNDBOARD", mensaje: "⚡ Efecto de sonido rápido activado", esAlerta: true });
         }
     });
 
     socket.on('desconectar-bot', () => {
-        if (tiktokLiveConnection) {
-            try { tiktokLiveConnection.disconnect(); } catch (e) {}
-        }
+        if (tiktokLiveConnection) { try { tiktokLiveConnection.disconnect(); } catch (e) {} }
         tiktokLiveConnection = null;
         socket.emit('estado-conexion', { status: 'desconectado' });
     });
@@ -524,12 +428,8 @@ io.on('connection', (socket) => {
             return;
         }
 
-        // ==========================================
-        // 🔄 REINICIO AUTOMÁTICO DEL RANKING AL CAMBIAR DE CUENTA
-        // ==========================================
         rankingLikes = {};
         io.emit('actualizar-ranking-likes', []);
-        // ==========================================
 
         configuracionCliente = config;
         const username = config.username;
@@ -541,9 +441,7 @@ io.on('connection', (socket) => {
         const palabrasProhibidas = config.palabrasProhibidas || [];
         const idiomaVoz = config.idiomaVoz || 'es';
         
-        if (tiktokLiveConnection) {
-            try { tiktokLiveConnection.disconnect(); } catch (e) {}
-        }
+        if (tiktokLiveConnection) { try { tiktokLiveConnection.disconnect(); } catch (e) {} }
 
         tiktokLiveConnection = new TikTokLiveConnection(username, {});
 
@@ -555,12 +453,9 @@ io.on('connection', (socket) => {
             tiktokLiveConnection.connect().then(state => {
                 socket.emit('estado-conexion', { status: 'conectado', room: state.roomId });
                 intentosReconexion = 0;
-
-                // 🚀 SALUDO DE BIENVIENIDA AUTOMÁTICO AL CONECTAR CON ÉXITO
                 const mensajeBienvenida = `Iniciando sistema Voztok para el canal de ${username}. Conexión establecida.`;
                 generarYEnviarAudio(socket, mensajeBienvenida, "VOZTOK AI", "🤖 " + mensajeBienvenida, true, null, idiomaVoz);
-
-            }).catch(err => {
+            }).catch(() => {
                 if (intentosReconexion < maxIntentos) {
                     intentosReconexion++;
                     let tiempoEspera = Math.min(10000 * Math.pow(2, intentosReconexion - 1), 60000);
@@ -578,32 +473,19 @@ io.on('connection', (socket) => {
 
         tiktokLiveConnection.on('like', data => {
             const usernameLike = limpiarTexto(data.user ? data.user.nickname : 'Anonimo', leerEmojis);
-            
             const count = parseInt(data.likeCount) || 1;
+            let avatarUrl = (data.user && data.user.avatarThumb && data.user.avatarThumb.urlList && data.user.avatarThumb.urlList.length > 0) ? data.user.avatarThumb.urlList[0] : '';
 
-            let avatarUrl = '';
-            if (data.user && data.user.avatarThumb && data.user.avatarThumb.urlList && data.user.avatarThumb.urlList.length > 0) {
-                avatarUrl = data.user.avatarThumb.urlList[0];
-            }
-
-            if (!rankingLikes[usernameLike]) {
-                rankingLikes[usernameLike] = { likes: 0, avatar: avatarUrl };
-            }
-            
+            if (!rankingLikes[usernameLike]) rankingLikes[usernameLike] = { likes: 0, avatar: avatarUrl };
             rankingLikes[usernameLike].likes += count;
-            
-            if (avatarUrl) {
-                rankingLikes[usernameLike].avatar = avatarUrl;
-            }
+            if (avatarUrl) rankingLikes[usernameLike].avatar = avatarUrl;
 
             if (timeoutActualizacionLikes) clearTimeout(timeoutActualizacionLikes);
-            
             timeoutActualizacionLikes = setTimeout(() => {
                 const topLikes = Object.entries(rankingLikes)
                     .sort((a, b) => b[1].likes - a[1].likes)
                     .slice(0, 5)
                     .map(([user, info]) => ({ user, likes: info.likes, avatar: info.avatar }));
-
                 io.emit('actualizar-ranking-likes', topLikes);
             }, 300);
         });
@@ -617,15 +499,8 @@ io.on('connection', (socket) => {
 
             if (mensajeLimpio === '' || contienePalabraProhibida(mensajeLimpio, palabrasProhibidas)) return;
 
-            const esSeguidor = (data.userIdentity && data.userIdentity.isFollowerOfAnchor === true) ||
-                               (data.followInfo && data.followInfo.following === true) || 
-                               (data.isFollowing === true) ||
-                               (data.user && data.user.followInfo && data.user.followInfo.following === true);
-
-            const esModerator = (data.userIdentity && data.userIdentity.isModeratorOfAnchor === true) || 
-                                (data.isModerator === true) || 
-                                (data.user && data.user.userRole === 2);
-            
+            const esSeguidor = (data.userIdentity && data.userIdentity.isFollowerOfAnchor === true) || (data.followInfo && data.followInfo.following === true) || (data.isFollowing === true);
+            const esModerator = (data.userIdentity && data.userIdentity.isModeratorOfAnchor === true) || (data.isModerator === true);
             const badgeList = (data.user && data.user.badgeList) || [];
             const esClubDeFans = badgeList.some(badge => badge.sceneType === 10);
 
@@ -636,8 +511,6 @@ io.on('connection', (socket) => {
                 if (rolesConfig.suscriptores && esClubDeFans) autorizado = true;
                 if (!autorizado) return;
             }
-
-            if (rolesConfig.suscriptores && !rolesConfig.todos && !esClubDeFans) return;
 
             if (tipoComentario === 'punto' && !mensajeLimpio.startsWith('.')) return;
             if (tipoComentario === 'barra' && !mensajeLimpio.startsWith('/')) return;
@@ -653,7 +526,6 @@ io.on('connection', (socket) => {
             const mensajeVisual = `¡${nombreLimpio} comenzó a seguir el directo! 🎉`;
             let customSoundUrl = guardarAudioBase64(alertas.soundFollow);
             let textoAlerta = alertas.follow ? `Gracias por seguirnos, ${nombreLimpio}` : null;
-            
             generarYEnviarAudio(socket, textoAlerta, "ALERTA TIKTOK", mensajeVisual, true, customSoundUrl, idiomaVoz);
         });
 
@@ -682,14 +554,21 @@ io.on('connection', (socket) => {
             const mensajeVisual = `🎁 ¡${nombreLimpio} envió ${cantidad}x ${nombreRegalo} (${diamantes} diamantes)!`;
             let customSoundUrl = guardarAudioBase64(alertas.soundGift);
             let textoAlerta = alertas.gift ? `${nombreLimpio} envió ${cantidad} ${nombreRegalo}` : null;
+            
+            // 🎡 DISPARAR RULETA EN TIEMPO REAL A TODOS LOS CLIENTES CONECTADOS
+            io.emit('girar-ruleta', {
+                usuario: nombreLimpio,
+                regalo: nombreRegalo,
+                cantidad: cantidad,
+                diamantes: diamantes
+            });
+
             generarYEnviarAudio(socket, textoAlerta, "REGALO", mensajeVisual, true, customSoundUrl, idiomaVoz);
         });
     });
 
     socket.on('disconnect', () => {
-        if (tiktokLiveConnection) {
-            try { tiktokLiveConnection.disconnect(); } catch (e) {}
-        }
+        if (tiktokLiveConnection) { try { tiktokLiveConnection.disconnect(); } catch (e) {} }
         if (claveLicenciaAsociada && sesionesActivasPorLicencia[claveLicenciaAsociada] === socket.id) {
             delete sesionesActivasPorLicencia[claveLicenciaAsociada];
         }
@@ -698,13 +577,7 @@ io.on('connection', (socket) => {
 
 function generarYEnviarAudio(socket, textoALeer, usuario, mensajeVisual, esAlerta, customSoundUrl, idiomaVoz) {
     if (!textoALeer) {
-        socket.emit('reproducir-audio', {
-            soundUrl: customSoundUrl,
-            audioUrl: null,
-            usuario: usuario,
-            mensaje: mensajeVisual,
-            esAlerta: esAlerta
-        });
+        socket.emit('reproducir-audio', { soundUrl: customSoundUrl, audioUrl: null, usuario: usuario, mensaje: mensajeVisual, esAlerta: esAlerta });
         return;
     }
 
@@ -713,31 +586,31 @@ function generarYEnviarAudio(socket, textoALeer, usuario, mensajeVisual, esAlert
 
     const speech = new gTTS(textoALeer, idiomaVoz || 'es');
     speech.save(rutaArchivo, (err) => {
-        if (err) {
-            console.error("❌ Error generando gTTS:", err);
-            return;
-        }
+        if (err) return;
 
-        socket.emit('reproducir-audio', {
-            soundUrl: customSoundUrl,
-            audioUrl: `/temp/${nombreArchivo}`,
-            usuario: usuario,
-            mensaje: mensajeVisual,
-            esAlerta: esAlerta
-        });
+        socket.emit('reproducir-audio', { soundUrl: customSoundUrl, audioUrl: `/temp/${nombreArchivo}`, usuario: usuario, mensaje: mensajeVisual, esAlerta: esAlerta });
 
         setTimeout(() => {
-            try {
-                if (fs.existsSync(rutaArchivo)) fs.unlinkSync(rutaArchivo);
-            } catch (e) {}
+            try { if (fs.existsSync(rutaArchivo)) fs.unlinkSync(rutaArchivo); } catch (e) {}
         }, 20000);
     });
 }
 
-const RENDER_URL = 'https://bot-tiktok-cloud.onrender.com';
+// Limpieza automática de la carpeta temp cada 10 minutos para evitar acumulación local
 setInterval(() => {
-    https.get(RENDER_URL, (res) => {}).on('error', (err) => {});
-}, 300000);
+    fs.readdir(dirTemp, (err, files) => {
+        if (err) return;
+        const ahora = Date.now();
+        files.forEach(file => {
+            const filePath = path.join(dirTemp, file);
+            fs.stat(filePath, (err, stats) => {
+                if (!err && (ahora - stats.mtimeMs > 60000 * 5)) { // Archivos de más de 5 mins
+                    try { fs.unlinkSync(filePath); } catch(e){}
+                }
+            });
+        });
+    });
+}, 600000);
 
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
