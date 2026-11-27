@@ -37,6 +37,11 @@ let rankingLikes = {};
 const GITHUB_TOKEN = process.env.GITHUB_TOKEN; 
 const GITHUB_REPO = process.env.GITHUB_REPO;   
 const GITHUB_BRANCH = process.env.GITHUB_BRANCH || "main";
+const EULERSTREAM_API_KEY = process.env.EULERSTREAM_API_KEY;
+
+if (!EULERSTREAM_API_KEY) {
+    console.warn('⚠️ EULERSTREAM_API_KEY no está definida en el entorno. Se usará el acceso sin clave (sujeto a límites estrictos).');
+}
 
 function cargarLicencias() {
     try {
@@ -463,11 +468,16 @@ io.on('connection', (socket) => {
         
         if (tiktokLiveConnection) { try { tiktokLiveConnection.disconnect(); } catch (e) {} }
 
-        tiktokLiveConnection = new TikTokLiveConnection(username, {});
+        const opcionesConexion = {};
+        if (EULERSTREAM_API_KEY) {
+            opcionesConexion.signApiKey = EULERSTREAM_API_KEY;
+        }
+
+        tiktokLiveConnection = new TikTokLiveConnection(username, opcionesConexion);
 
         let tiempoDeInicio = Date.now();
         let intentosReconexion = 0;
-        const maxIntentos = 5;
+        const maxIntentos = 2;
 
         function conectarConReintento() {
             console.log(`🔌 Intentando conectar a TikTok Live (${username})...`);
@@ -477,14 +487,29 @@ io.on('connection', (socket) => {
                 const mensajeBienvenida = `Iniciando sistema Voztok para el canal de ${username}. Conexión establecida.`;
                 generarYEnviarAudio(socket, mensajeBienvenida, "VOZTOK AI", "🤖 " + mensajeBienvenida, true, null, idiomaVoz);
             }).catch((err) => {
-                console.error(`❌ Error conectando a TikTok Live (${username}):`, err && (err.message || err));
+                const detalleError = (err && (err.message || String(err))) || 'Error desconocido';
+                console.error(`❌ Error conectando a TikTok Live (${username}):`, detalleError);
+
+                const esRateLimit = /rate.?limit|429|too many/i.test(detalleError);
+                const esOfflineONoExiste = /offline|not live|room.*not found|user.*not found|live has ended/i.test(detalleError);
+
+                if (esRateLimit) {
+                    socket.emit('estado-conexion', { status: 'error', message: 'Límite de solicitudes del servidor de firma alcanzado.' });
+                    return;
+                }
+
+                if (esOfflineONoExiste) {
+                    socket.emit('estado-conexion', { status: 'error', message: 'El canal no está en vivo o no fue encontrado.' });
+                    return;
+                }
+
                 if (intentosReconexion < maxIntentos) {
                     intentosReconexion++;
-                    let tiempoEspera = Math.min(10000 * Math.pow(2, intentosReconexion - 1), 60000);
+                    const tiempoEspera = 15000 * intentosReconexion;
                     socket.emit('estado-conexion', { status: 'error', message: `Reintentando en ${tiempoEspera / 1000}s...` });
                     setTimeout(() => conectarConReintento(), tiempoEspera);
                 } else {
-                    socket.emit('estado-conexion', { status: 'error', message: 'Límite de reintentos alcanzado.' });
+                    socket.emit('estado-conexion', { status: 'error', message: 'No se pudo establecer la conexión con TikTok.' });
                 }
             });
         }
