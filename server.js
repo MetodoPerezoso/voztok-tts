@@ -434,11 +434,13 @@ io.on('connection', (socket) => {
     socket.on('configurar-usuario', (config) => {
         cargarLicencias();
         if (!config.licenseKey || !licenciasValidas[config.licenseKey]) {
+            console.warn('⚠️ configurar-usuario rechazado: licencia no autorizada:', config.licenseKey);
             socket.emit('estado-conexion', { status: 'error', message: 'Licencia no autorizada.' });
             return;
         }
 
         if (sesionesActivasPorLicencia[config.licenseKey] !== socket.id) {
+            console.warn('⚠️ configurar-usuario rechazado: sesión duplicada o desincronizada para:', config.licenseKey);
             socket.emit('estado-conexion', { status: 'error', message: 'Sesión duplicada o invalidada.' });
             return;
         }
@@ -468,12 +470,14 @@ io.on('connection', (socket) => {
         const maxIntentos = 5;
 
         function conectarConReintento() {
+            console.log(`🔌 Intentando conectar a TikTok Live (${username})...`);
             tiktokLiveConnection.connect().then(state => {
                 socket.emit('estado-conexion', { status: 'conectado', room: state.roomId });
                 intentosReconexion = 0;
                 const mensajeBienvenida = `Iniciando sistema Voztok para el canal de ${username}. Conexión establecida.`;
                 generarYEnviarAudio(socket, mensajeBienvenida, "VOZTOK AI", "🤖 " + mensajeBienvenida, true, null, idiomaVoz);
-            }).catch(() => {
+            }).catch((err) => {
+                console.error(`❌ Error conectando a TikTok Live (${username}):`, err && (err.message || err));
                 if (intentosReconexion < maxIntentos) {
                     intentosReconexion++;
                     let tiempoEspera = Math.min(10000 * Math.pow(2, intentosReconexion - 1), 60000);
