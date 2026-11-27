@@ -7,6 +7,13 @@ const gTTS = require('gtts');
 const fs = require('fs');
 const path = require('path');
 const https = require('https');
+const dns = require('dns');
+
+dns.setDefaultResultOrder('ipv4first');
+
+process.on('uncaughtException', (err) => {
+    console.error('🛡️ Error no capturado interceptado (servidor salvado):', err.message);
+});
 
 const app = express();
 app.use(cors());
@@ -597,16 +604,35 @@ function generarYEnviarAudio(socket, textoALeer, usuario, mensajeVisual, esAlert
     const nombreArchivo = `tts_${Date.now()}_${Math.random().toString(36).substring(7)}.mp3`;
     const rutaArchivo = path.join(dirTemp, nombreArchivo);
 
-    const speech = new gTTS(textoALeer, idiomaVoz || 'es');
-    speech.save(rutaArchivo, (err) => {
-        if (err) return;
+    try {
+        const speech = new gTTS(textoALeer, idiomaVoz || 'es');
+        const writeStream = fs.createWriteStream(rutaArchivo);
+        const streamAudio = speech.stream();
 
-        socket.emit('reproducir-audio', { soundUrl: customSoundUrl, audioUrl: `/temp/${nombreArchivo}`, usuario: usuario, mensaje: mensajeVisual, esAlerta: esAlerta });
-
-        setTimeout(() => {
+        streamAudio.on('error', (err) => {
+            console.error("⚠️ Timeout o error de red en Google TTS (ignorado para mantener el bot vivo):", err.code || err.message);
+            writeStream.destroy();
             try { if (fs.existsSync(rutaArchivo)) fs.unlinkSync(rutaArchivo); } catch (e) {}
-        }, 20000);
-    });
+            socket.emit('reproducir-audio', { soundUrl: customSoundUrl, audioUrl: null, usuario: usuario, mensaje: mensajeVisual, esAlerta: esAlerta });
+        });
+
+        writeStream.on('error', (err) => {
+            console.error("⚠️ Error escribiendo archivo de audio temporal:", err.message);
+        });
+
+        writeStream.on('finish', () => {
+            socket.emit('reproducir-audio', { soundUrl: customSoundUrl, audioUrl: `/temp/${nombreArchivo}`, usuario: usuario, mensaje: mensajeVisual, esAlerta: esAlerta });
+
+            setTimeout(() => {
+                try { if (fs.existsSync(rutaArchivo)) fs.unlinkSync(rutaArchivo); } catch (e) {}
+            }, 20000);
+        });
+
+        streamAudio.pipe(writeStream);
+    } catch (e) {
+        console.error("⚠️ Error general en TTS:", e.message);
+        socket.emit('reproducir-audio', { soundUrl: customSoundUrl, audioUrl: null, usuario: usuario, mensaje: mensajeVisual, esAlerta: esAlerta });
+    }
 }
 
 // Limpieza automática de la carpeta temp cada 10 minutos
